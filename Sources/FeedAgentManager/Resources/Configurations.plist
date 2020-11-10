@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Agents</key>
+	<dict>
+		<key>Feedly</key>
+		<dict>
+			<key>domain</key>
+			<string>sandbox7.feedly.com</string>
+			<key>authentication_url</key>
+			<string>v3/auth/auth</string>
+			<key>token_url</key>
+			<string>v3/auth/token</string>
+			<key>logout_url</key>
+			<string>v3/auth/logout</string>
+			<key>response_type</key>
+			<string>code</string>
+			<key>scope</key>
+			<string>https://cloud.feedly.com/subscriptions</string>
+			<key>redirect_url</key>
+			<string>test://</string>
+			<key>page_count</key>
+			<integer>20</integer>
+			<key>strage_key</key>
+			<string>feed_manager</string>
+		</dict>
+	</dict>
+</dict>
+</plist>
