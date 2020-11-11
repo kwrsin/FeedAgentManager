@@ -145,11 +145,10 @@ extension FeedAgentManager {
     }
     
     public static func request(
-        url: URL, params: Data? = nil, method: HttpMethod = .POST, concurrentType: ConcurrentType = .NonBlocking ,accessToken: String? = nil, needContentType: Bool = false, completion: @escaping Completion) {
+        url: URL, params: Data? = nil, method: HttpMethod = .POST, concurrentType: ConcurrentType = .NonBlocking ,accessToken: String? = nil, completion: @escaping Completion) {
         var request = URLRequest(url: url)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if needContentType {
-            // except .GET method
+        if method == .GET {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
         if let accessToken = accessToken {
@@ -178,9 +177,15 @@ extension FeedAgentManager {
     }
     
     public static func post(
-        url: URL, params: Data? = nil, concurrentType: ConcurrentType = .NonBlocking, accessToken: String? = nil, needContentType: Bool = false, completion: @escaping Completion) {
+        url: URL, params: Data? = nil, concurrentType: ConcurrentType = .NonBlocking, accessToken: String? = nil, completion: @escaping Completion) {
         FeedAgentManager.request(
-            url: url, params: params, method: .POST, concurrentType: concurrentType, accessToken: accessToken, needContentType: needContentType, completion: completion)
+            url: url, params: params, method: .POST, concurrentType: concurrentType, accessToken: accessToken, completion: completion)
+    }
+
+    public static func get(
+        url: URL, params: Data? = nil, concurrentType: ConcurrentType = .NonBlocking, accessToken: String? = nil, completion: @escaping Completion) {
+        FeedAgentManager.request(
+            url: url, params: params, method: .GET, concurrentType: concurrentType, accessToken: accessToken, completion: completion)
     }
 
 }
@@ -197,9 +202,11 @@ public protocol Agent {
     var refreshToken:String? {get}
     var expiresIn:TimeInterval? {get}
     var isExpired: Bool {get}
+    var userId:String? {get}
     
     func requestAccessToken() -> FeedAgentManager.FeedAgentResult
     func requestNewAccessToken() -> FeedAgentManager.FeedAgentResult
+    func requestProfile() -> FeedAgentManager.FeedAgentResult
     func logout(completion: @escaping FeedAgentManager.Completion)
 }
 
@@ -270,12 +277,13 @@ public class Feedly: FeedAgent, Agent {
     public var expiresIn:TimeInterval? {props["expires_in"] as? TimeInterval}
     public var createdAt:TimeInterval? {props["created_at"] as? TimeInterval}
     public var tokenType:String? {props["token_type"] as? String}
-    public var bearerToken: String? {get {
+    public var bearerToken:String? {get {
         if let accessToken = accessToken, let tokenType = tokenType {
             return "\(tokenType.capitalized) \(accessToken)"
         }
         return nil
     }}
+    public var userId:String? {props["id"] as? String}
     
     // response parameters
     var state: String { //TODO: 未定
@@ -379,6 +387,17 @@ public class Feedly: FeedAgent, Agent {
         FeedAgentManager.post(
             url: URL(
                 string: self.access_token_url)!, params: self.refresh_token_params.data(using: .utf8), concurrentType: .Blocking) { result in
+            faResult = result
+        }
+        store(result: faResult)
+        return faResult!
+    }
+    
+    public func requestProfile() -> FeedAgentManager.FeedAgentResult {
+        var faResult: FeedAgentManager.FeedAgentResult?
+        FeedAgentManager.get(
+            url: URL(
+                string: self.profile_url)!, concurrentType: .Blocking, accessToken: self.bearerToken) { result in
             faResult = result
         }
         store(result: faResult)
