@@ -148,15 +148,14 @@ extension FeedAgentManager {
         url: URL, params: Data? = nil, method: HttpMethod = .POST, concurrentType: ConcurrentType = .NonBlocking ,accessToken: String? = nil, completion: @escaping Completion) {
         var request = URLRequest(url: url)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if method == .GET {
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        }
+//        if method != .GET {
+//            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+//        }
         if let accessToken = accessToken {
             request.setValue(accessToken, forHTTPHeaderField: "Authorization")
         }
         request.httpMethod = method.rawValue
         request.httpBody = params
-//        request.httpBody = params.data(using: String.Encoding.utf8)//TODO: 変更 GETの場合？
         switch concurrentType {
         case .NonBlocking:
             URLSession.shared.dataTask(with: request) { data, response, error in
@@ -172,7 +171,7 @@ extension FeedAgentManager {
                 FeedAgentManager.process(data: data, responseHeader: response, error: error, completion: completion)
                 semaphore.signal()
             }.resume()
-            _ = semaphore.wait(wallTimeout: .distantFuture)//TODO: 時間指定が必要かも・・
+            _ = semaphore.wait(wallTimeout: .distantFuture)//TODO: need timers
         }
     }
     
@@ -286,7 +285,7 @@ public class Feedly: FeedAgent, Agent {
     public var userId:String? {props["id"] as? String}
     
     // response parameters
-    var state: String { //TODO: 未定
+    var state: String { //TODO: not implemented yet
         get {
             if let params = params, let state = params["state"] as? String {
                 return state
@@ -325,7 +324,7 @@ public class Feedly: FeedAgent, Agent {
         "https://\(self.domain)/\(self.tokenUrl)"
     }
     
-    public var logout_from_feedly_url: String {
+    public var logout_url: String {
         "https://\(self.domain)/\(self.logoutUrl)"
     }
     
@@ -368,7 +367,13 @@ public class Feedly: FeedAgent, Agent {
         guard isValidResponse() else {
             return Result.failure(FeedAgentManager.FeedError.parameterError)
         }
-        return requestAccessToken()
+        let result = requestAccessToken()
+        switch result {
+        case .failure(_):
+            return result
+        default:
+            return requestProfile()
+        }
     }
     
     public func requestAccessToken() -> FeedAgentManager.FeedAgentResult {
@@ -407,7 +412,7 @@ public class Feedly: FeedAgent, Agent {
     public func logout(completion: @escaping FeedAgentManager.Completion) {
         FeedAgentManager.post(
             url: URL(
-                string: self.logout_from_feedly_url)!, concurrentType: .NonBlocking, accessToken: self.bearerToken) { [weak self] result in
+                string: self.logout_url)!, concurrentType: .NonBlocking, accessToken: self.bearerToken) { [weak self] result in
             switch result {
             case .success(_):
                 self?.clear(result: result)
