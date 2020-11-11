@@ -65,7 +65,7 @@ extension FeedAgentManager {
 //        case parseError(String)
         case requestError(String)
         case responseError(Dict)
-        case formatError
+        case connectionError(String)
         case parameterError
         case unknownError
     }
@@ -115,23 +115,17 @@ extension FeedAgentManager {
     public static func process(
         data: Data, responseHeader: URLResponse?, error: Error?, completion: @escaping Completion) {
         do {
+            let values = try JSONSerialization.jsonObject(with: data, options: .allowFragments)
             if let responseHeader = responseHeader, isValidResponse(responseHeader: responseHeader) == false {
                 if let error = error {
                     completion(.failure(FeedError.requestError(error.localizedDescription)))
-                    return
                 } else {
-                    let values = try JSONSerialization.jsonObject(with: data, options: .allowFragments)
                     if let errors = FeedAgentManager.getResponseError(values: values) {
                         completion(.failure(FeedError.responseError(errors)))
                     } else {
                         completion(.failure(FeedError.unknownError))
                     }
-                    return
                 }
-            }
-            let values = try JSONSerialization.jsonObject(with: data, options: .allowFragments)
-            if let errors = FeedAgentManager.getResponseError(values: values) {
-                completion(.failure(FeedError.responseError(errors)))
                 return
             }
             completion(.success(values))
@@ -145,8 +139,8 @@ extension FeedAgentManager {
 //                completion(.success(values as? Dict ?? [:]))
 //            }
 
-        } catch {
-            completion(.failure(FeedError.formatError))
+        } catch(let error) {
+            completion(.failure(FeedError.connectionError(error.localizedDescription)))
         }
     }
     
