@@ -67,6 +67,7 @@ extension FeedAgentManager {
         case responseError(Dict)
         case formatError
         case parameterError
+        case unknownError
     }
     
     public enum FeedResponse {
@@ -95,6 +96,7 @@ extension FeedAgentManager {
     public typealias Dict = [String: Any]
     public typealias FeedAgentResult = Result<Any, FeedAgentManager.FeedError>
     public typealias Completion = (FeedAgentResult) -> Void
+
     public static func getResponseError(values: Any) -> Dict? {
         let errors = values as? Dict ?? [:]
         if errors["errorCode"] != nil {
@@ -103,9 +105,30 @@ extension FeedAgentManager {
         return nil
     }
     
+    public static func isValidResponse(responseHeader: URLResponse) -> Bool {
+        if let responseHeader = responseHeader as? HTTPURLResponse {
+            return responseHeader.statusCode >= 200 && responseHeader.statusCode < 300
+        }
+        return false;
+    }
+    
     public static func process(
-        data: Data, completion: @escaping Completion) {
+        data: Data, responseHeader: URLResponse?, error: Error?, completion: @escaping Completion) {
         do {
+            if let responseHeader = responseHeader, isValidResponse(responseHeader: responseHeader) == false {
+                if let error = error {
+                    completion(.failure(FeedError.requestError(error.localizedDescription)))
+                    return
+                } else {
+                    let values = try JSONSerialization.jsonObject(with: data, options: .allowFragments)
+                    if let errors = FeedAgentManager.getResponseError(values: values) {
+                        completion(.failure(FeedError.responseError(errors)))
+                    } else {
+                        completion(.failure(FeedError.unknownError))
+                    }
+                    return
+                }
+            }
             let values = try JSONSerialization.jsonObject(with: data, options: .allowFragments)
             if let errors = FeedAgentManager.getResponseError(values: values) {
                 completion(.failure(FeedError.responseError(errors)))
@@ -143,25 +166,17 @@ extension FeedAgentManager {
 //        request.httpBody = params.data(using: String.Encoding.utf8)//TODO: 変更 GETの場合？
         switch concurrentType {
         case .NonBlocking:
-            URLSession.shared.dataTask(with: request) { data, _, error in
-                if let error = error {
-                    completion(.failure(FeedError.requestError(error.localizedDescription)))
-                    return
-                }
+            URLSession.shared.dataTask(with: request) { data, response, error in
                 DispatchQueue.main.async {
                     let data = data ?? Data()
-                    FeedAgentManager.process(data: data, completion: completion)
+                    FeedAgentManager.process(data: data, responseHeader: response, error: error, completion: completion)
                 }
             }.resume()
         case .Blocking:
             let semaphore = DispatchSemaphore(value: 0)
-            URLSession.shared.dataTask(with: request) { data, _, error in
-                if let error = error {
-                    completion(.failure(FeedError.requestError(error.localizedDescription)))
-                    return
-                }
+            URLSession.shared.dataTask(with: request) { data, response, error in
                 let data = data ?? Data()
-                FeedAgentManager.process(data: data, completion: completion)
+                FeedAgentManager.process(data: data, responseHeader: response, error: error, completion: completion)
                 semaphore.signal()
             }.resume()
             _ = semaphore.wait(wallTimeout: .distantFuture)//TODO: 時間指定が必要かも・・
@@ -310,6 +325,22 @@ public class Feedly: FeedAgent, Agent {
     
     public var logout_from_feedly_url: String {
         "https://\(self.domain)/\(self.logoutUrl)"
+    }
+    
+    var personal_collections_url: String {
+        "https://\(self.domain)/v3/collections"
+    }
+    
+    var mget_url: String {
+        "https://\(self.domain)/v3/entries/.mget"
+    }
+    
+//    var streams_url: String {
+//        "https://\(self.domain)/v3/streams/contents?streamId=\(self.streamId)&count=\(self.pageCount)"
+//    }
+    
+    var profile_url: String {
+        "https://\(self.domain)/v3/profile"
     }
     
 
