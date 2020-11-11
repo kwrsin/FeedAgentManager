@@ -224,7 +224,10 @@ public class FeedAgent {
     
     func updateProperties(properties: StrageManager.Properties, needCreateAt: Bool = false) {
         props = props.merging(properties){$1}
-        if needCreateAt {props["created_at"] = Date.timeIntervalSinceReferenceDate}
+        if needCreateAt {
+            props["created_at"] = Date.timeIntervalSinceReferenceDate
+            props["user_id"] = props["id"]
+        }
         self.strage.storeProperties(key: self.strageKey, dict: props)
     }
         
@@ -282,7 +285,7 @@ public class Feedly: FeedAgent, Agent {
         }
         return nil
     }}
-    public var userId:String? {props["id"] as? String}
+    public var userId:String? {props["user_id"] as? String}
     
     // response parameters
     var state: String { //TODO: not implemented yet
@@ -367,13 +370,7 @@ public class Feedly: FeedAgent, Agent {
         guard isValidResponse() else {
             return Result.failure(FeedAgentManager.FeedError.parameterError)
         }
-        let result = requestAccessToken()
-        switch result {
-        case .failure(_):
-            return result
-        default:
-            return requestProfile()
-        }
+        return requestAccessToken()
     }
     
     public func requestAccessToken() -> FeedAgentManager.FeedAgentResult {
