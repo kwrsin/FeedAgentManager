@@ -226,7 +226,6 @@ public class FeedAgent {
         props = props.merging(properties){$1}
         if needCreateAt {
             props["created_at"] = Date.timeIntervalSinceReferenceDate
-            props["user_id"] = props["id"]
         }
         self.strage.storeProperties(key: self.strageKey, dict: props)
     }
@@ -285,7 +284,7 @@ public class Feedly: FeedAgent, Agent {
         }
         return nil
     }}
-    public var userId:String? {props["user_id"] as? String}
+    public var userId:String? {props["id"] as? String}
     
     // response parameters
     var state: String { //TODO: not implemented yet
