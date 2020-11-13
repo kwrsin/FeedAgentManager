@@ -430,9 +430,10 @@ public class Feedly: FeedAgent, Agent {
             streams_url.append("continuation=\(continuation)&")
         } else {
             if let newerThan = props["entries_newerThan"] as? Int64, newerThan > 0 {
-                streams_url.append("newerThan=\(newerThan)&")
+                streams_url.append("newerThan=\(newerThan + 1)&")
             }
         }
+        //TODO: rank?
 
         FeedAgentManager.get(
             url: URL(
