@@ -429,7 +429,7 @@ public class Feedly: FeedAgent, Agent {
         if let continuation = continuation, continuation.isEmpty == false {
             streams_url.append("continuation=\(continuation)&")
         } else {
-            if let newerThan = props["newerThan"] as? Int64, newerThan > 0 {
+            if let newerThan = props["entries_newerThan"] as? Int64, newerThan > 0 {
                 streams_url.append("newerThan=\(newerThan)&")
             }
         }
@@ -439,17 +439,12 @@ public class Feedly: FeedAgent, Agent {
                 string: streams_url)!, concurrentType: .NonBlocking, accessToken: self.bearerToken) {result in
             switch result {
             case .success(let dict as FeedAgentManager.Dict):
-//                if let newerThan = dict["updated"] as? Int64 {
-//                    self.newerThan = newerThan
-//                }
-//                if let unreadOnly = dict["unreadOnly"] as? Bool {
-//                    self.unreadOnly = unreadOnly
-//                }
                 if let continuation = dict["continuation"] as? String {
                     self.continuation = continuation
                 } else {
-                    //TODO newerThanの保存
-                    
+                    if let newerThan = dict["updated"] as? Int64 {
+                        self.updateProperties(properties: ["entries_newerThan": newerThan])
+                    }
                     self.continuation?.removeAll()
                 }
             default:
