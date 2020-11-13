@@ -207,6 +207,7 @@ public protocol Agent {
     func requestNewAccessToken() -> FeedAgentManager.FeedAgentResult
     func requestProfile() -> FeedAgentManager.FeedAgentResult
     func logout(completion: @escaping FeedAgentManager.Completion)
+    func requestAllArticlesByPage(unreadOnly:Bool, completion: @escaping FeedAgentManager.Completion)
 }
 
 public class FeedAgent {
@@ -285,6 +286,8 @@ public class Feedly: FeedAgent, Agent {
         return nil
     }}
     public var userId:String? {props["id"] as? String}
+    var continuation:String? = nil
+
     
     // response parameters
     var state: String { //TODO: not implemented yet
@@ -337,10 +340,6 @@ public class Feedly: FeedAgent, Agent {
     var mget_url: String {
         "https://\(self.domain)/v3/entries/.mget"
     }
-    
-//    var streams_url: String {
-//        "https://\(self.domain)/v3/streams/contents?streamId=\(self.streamId)&count=\(self.pageCount)"
-//    }
     
     var profile_url: String {
         "https://\(self.domain)/v3/profile"
@@ -418,6 +417,48 @@ public class Feedly: FeedAgent, Agent {
             completion(result)
         }
     }
+
+    public func requestAllArticlesByPage(unreadOnly: Bool = false, completion: @escaping FeedAgentManager.Completion) {
+        let streamId = "user/\(userId!)/category/global.all"
+        var streams_url: String =
+            "https://\(domain)/v3/streams/contents?streamId=\(streamId)&count=\(self.pageCount)&"
+
+        if unreadOnly == true {
+            streams_url.append("unreadOnly=true&")
+        }
+        if let continuation = continuation, continuation.isEmpty == false {
+            streams_url.append("continuation=\(continuation)&")
+        } else {
+            if let newerThan = props["newerThan"] as? Int64, newerThan > 0 {
+                streams_url.append("newerThan=\(newerThan)&")
+            }
+        }
+
+        FeedAgentManager.get(
+            url: URL(
+                string: streams_url)!, concurrentType: .NonBlocking, accessToken: self.bearerToken) {result in
+            switch result {
+            case .success(let dict as FeedAgentManager.Dict):
+//                if let newerThan = dict["updated"] as? Int64 {
+//                    self.newerThan = newerThan
+//                }
+//                if let unreadOnly = dict["unreadOnly"] as? Bool {
+//                    self.unreadOnly = unreadOnly
+//                }
+                if let continuation = dict["continuation"] as? String {
+                    self.continuation = continuation
+                } else {
+                    //TODO newerThanの保存
+                    
+                    self.continuation?.removeAll()
+                }
+            default:
+                break
+            }
+            completion(result)
+        }
+    }
+
 }
 
 //MARK: BUILTIN EXTENSIONS
