@@ -88,7 +88,23 @@ extension FeedAgentManager {
         case Blocking
         case NonBlocking
     }
+
+    public enum MarkingAction:String {
+        case markAsRead
+        case keepUnread
+        case undoMarkAsRead
+        case markAsSaved
+        case markAsUnsaved
+        
+    }
     
+    public enum MarkingType:String {
+        case entries
+        case feeds
+        case categories
+        case tags
+    }
+
 }
 
 //MARK: utilities
@@ -115,6 +131,13 @@ extension FeedAgentManager {
     public static func process(
         data: Data, responseHeader: URLResponse?, error: Error?, completion: @escaping Completion) {
         do {
+            if let responseHeader = responseHeader, isValidResponse(responseHeader: responseHeader) {
+                if data.isEmpty {
+                    completion(.success([:]))
+                    return
+                }
+            }
+
             let values = try JSONSerialization.jsonObject(with: data, options: .allowFragments)
             if let responseHeader = responseHeader, isValidResponse(responseHeader: responseHeader) == false {
                 if let error = error {
@@ -145,12 +168,12 @@ extension FeedAgentManager {
     }
     
     public static func request(
-        url: URL, params: Data? = nil, method: HttpMethod = .POST, concurrentType: ConcurrentType = .NonBlocking ,accessToken: String? = nil, completion: @escaping Completion) {
+        url: URL, params: Data? = nil, method: HttpMethod = .POST, concurrentType: ConcurrentType = .NonBlocking ,accessToken: String? = nil, needJsonContentType: Bool = false, completion: @escaping Completion) {
         var request = URLRequest(url: url)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-//        if method != .GET {
-//            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-//        }
+        if needJsonContentType {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        }
         if let accessToken = accessToken {
             request.setValue(accessToken, forHTTPHeaderField: "Authorization")
         }
@@ -176,15 +199,15 @@ extension FeedAgentManager {
     }
     
     public static func post(
-        url: URL, params: Data? = nil, concurrentType: ConcurrentType = .NonBlocking, accessToken: String? = nil, completion: @escaping Completion) {
+        url: URL, params: Data? = nil, concurrentType: ConcurrentType = .NonBlocking, accessToken: String? = nil, needJsonContentType: Bool = false, completion: @escaping Completion) {
         FeedAgentManager.request(
-            url: url, params: params, method: .POST, concurrentType: concurrentType, accessToken: accessToken, completion: completion)
+            url: url, params: params, method: .POST, concurrentType: concurrentType, accessToken: accessToken, needJsonContentType: needJsonContentType, completion: completion)
     }
 
     public static func get(
-        url: URL, params: Data? = nil, concurrentType: ConcurrentType = .NonBlocking, accessToken: String? = nil, completion: @escaping Completion) {
+        url: URL, params: Data? = nil, concurrentType: ConcurrentType = .NonBlocking, accessToken: String? = nil, needJsonContentType: Bool = false, completion: @escaping Completion) {
         FeedAgentManager.request(
-            url: url, params: params, method: .GET, concurrentType: concurrentType, accessToken: accessToken, completion: completion)
+            url: url, params: params, method: .GET, concurrentType: concurrentType, accessToken: accessToken, needJsonContentType:needJsonContentType, completion: completion)
     }
 
 }
@@ -208,6 +231,12 @@ public protocol Agent {
     func requestProfile() -> FeedAgentManager.FeedAgentResult
     func logout(completion: @escaping FeedAgentManager.Completion)
     func requestAllArticlesByPage(unreadOnly:Bool, completion: @escaping FeedAgentManager.Completion)
+    func requestMarking(entries: FeedAgentManager.Dict, type: FeedAgentManager.MarkingType, action: FeedAgentManager.MarkingAction, completion: @escaping FeedAgentManager.Completion)
+    func requestTagging(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion)
+    func requestSearching(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion)
+    func requestAppendingCategory(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion)
+    func requestCreatingNewCategory(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion)
+    func requestAllSavedArticles(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion)
 }
 
 public class FeedAgent {
@@ -429,6 +458,7 @@ public class Feedly: FeedAgent, Agent {
         if let continuation = continuation, continuation.isEmpty == false {
             streams_url.append("continuation=\(continuation)&")
         } else {
+            //TODO: need preventNewerThan?
             if let newerThan = props["entries_newerThan"] as? Int64, newerThan > 0 {
                 streams_url.append("newerThan=\(newerThan + 1)&")
             }
@@ -454,6 +484,53 @@ public class Feedly: FeedAgent, Agent {
             completion(result)
         }
     }
+    
+    public func requestMarking(entries: FeedAgentManager.Dict, type: FeedAgentManager.MarkingType, action: FeedAgentManager.MarkingAction, completion: @escaping FeedAgentManager.Completion) {
+        let markers_url: String =
+            "https://\(domain)/v3/markers"
+        var params = [String: Any]()
+        params = params.merging(entries){$1}
+        params["action"] = action.rawValue
+        params["type"] = type.rawValue
+       
+        var json:Data? = nil
+        do {
+            json = try JSONSerialization.data(withJSONObject: params, options: [])
+        } catch (let error) {
+            completion(
+                .failure(
+                        FeedAgentManager.FeedError.requestError(error.localizedDescription)))
+        }
+
+        FeedAgentManager.post(
+            url: URL(
+                string: markers_url)!, params: json, concurrentType: .NonBlocking, accessToken: self.bearerToken, needJsonContentType: true) {result in
+            completion(result)
+        }
+    }
+    
+    public func requestTagging(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion) {
+        
+    }
+    
+    public func requestSearching(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion) {
+        
+    }
+    
+    public func requestAppendingCategory(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion) {
+        
+        
+    }
+    
+    public func requestCreatingNewCategory(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion) {
+        
+        
+    }
+    
+    public func requestAllSavedArticles(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion) {
+        
+    }
+
 
 }
 
