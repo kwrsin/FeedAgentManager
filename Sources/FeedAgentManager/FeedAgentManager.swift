@@ -246,7 +246,7 @@ public protocol Agent {
     func requestAllArticlesByPage(unreadOnly:Bool, completion: @escaping FeedAgentManager.Completion)
     func requestMarking(entries: FeedAgentManager.Dict, type: FeedAgentManager.MarkingType, action: FeedAgentManager.MarkingAction, completion: @escaping FeedAgentManager.Completion)
     func requestTagging(entries: FeedAgentManager.Dict, tagIds: FeedAgentManager.Array, completion: @escaping FeedAgentManager.Completion)
-    func requestUnTagging(entyIds: FeedAgentManager.Array, tagNames: FeedAgentManager.Array, completion: @escaping FeedAgentManager.Completion)
+    func requestUnTagging(entyIds: FeedAgentManager.Array?, tagIds: FeedAgentManager.Array, completion: @escaping FeedAgentManager.Completion)
     func requestRenamingTag(tagId: String, label: String, completion: @escaping FeedAgentManager.Completion)
     func requestTags(completion: @escaping FeedAgentManager.Completion)
     func requestSearching(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion)
@@ -551,8 +551,22 @@ public class Feedly: FeedAgent, Agent {
         }
     }
     
-    public func requestUnTagging(entyIds: FeedAgentManager.Array, tagNames: FeedAgentManager.Array, completion: @escaping FeedAgentManager.Completion) {
-        
+    public func requestUnTagging(entyIds: FeedAgentManager.Array?, tagIds: FeedAgentManager.Array, completion: @escaping FeedAgentManager.Completion) {
+        let entyIds =
+            entyIds?.joined(separator: ",")
+                .addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)! ?? ""
+        let tagIds =
+            tagIds.joined(separator: ",")
+                .addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)!
+        let tags_url: String =
+            "\(self.tags_url)/\(tagIds)/\(entyIds)"
+                
+        FeedAgentManager.delete(
+            url: URL(
+                string: tags_url)!, concurrentType: .Blocking, accessToken: self.bearerToken, needJsonContentType: true) {result in
+            completion(result)
+        }
+
     }
     
     public func requestRenamingTag(tagId: String, label: String, completion: @escaping FeedAgentManager.Completion) {
