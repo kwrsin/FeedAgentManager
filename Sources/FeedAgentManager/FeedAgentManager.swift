@@ -245,7 +245,7 @@ public protocol Agent {
     func logout(completion: @escaping FeedAgentManager.Completion)
     func requestAllArticlesByPage(unreadOnly:Bool, completion: @escaping FeedAgentManager.Completion)
     func requestMarking(entries: FeedAgentManager.Dict, type: FeedAgentManager.MarkingType, action: FeedAgentManager.MarkingAction, completion: @escaping FeedAgentManager.Completion)
-    func requestTagging(entries: FeedAgentManager.Dict, tagNames: FeedAgentManager.Array, completion: @escaping FeedAgentManager.Completion)
+    func requestTagging(entries: FeedAgentManager.Dict, tagIds: FeedAgentManager.Array, completion: @escaping FeedAgentManager.Completion)
     func requestUnTagging(entyIds: FeedAgentManager.Array, tagNames: FeedAgentManager.Array, completion: @escaping FeedAgentManager.Completion)
     func requestRenamingTag(tagId: String, label: String, completion: @escaping FeedAgentManager.Completion)
     func requestTags(completion: @escaping FeedAgentManager.Completion)
@@ -528,12 +528,12 @@ public class Feedly: FeedAgent, Agent {
         }
     }
     
-    public func requestTagging(entries: FeedAgentManager.Dict, tagNames: FeedAgentManager.Array,completion: @escaping FeedAgentManager.Completion) {
-        let tagNames =
-            tagNames.joined(separator: ",")
+    public func requestTagging(entries: FeedAgentManager.Dict, tagIds: FeedAgentManager.Array,completion: @escaping FeedAgentManager.Completion) {
+        let tagIds =
+            tagIds.joined(separator: ",")
                 .addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)!
         let tags_url: String =
-            "\(self.tags_url)/\(tagNames)"
+            "\(self.tags_url)/\(tagIds)"
 
         var json:Data? = nil
         do {
@@ -571,7 +571,7 @@ public class Feedly: FeedAgent, Agent {
 
         FeedAgentManager.post(
             url: URL(
-                string: tags_url)!, params: json, concurrentType: .Blocking, accessToken: self.bearerToken, needJsonContentType: true) {result in
+                string: tags_url)!, params: json, concurrentType: .NonBlocking, accessToken: self.bearerToken, needJsonContentType: true) {result in
             completion(result)
         }
 
