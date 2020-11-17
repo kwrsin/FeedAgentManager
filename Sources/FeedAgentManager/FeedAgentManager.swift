@@ -110,6 +110,7 @@ extension FeedAgentManager {
 //MARK: utilities
 extension FeedAgentManager {
     public typealias Dict = [String: Any]
+    public typealias Array = [String]
     public typealias FeedAgentResult = Result<Any, FeedAgentManager.FeedError>
     public typealias Completion = (FeedAgentResult) -> Void
 
@@ -204,6 +205,18 @@ extension FeedAgentManager {
             url: url, params: params, method: .POST, concurrentType: concurrentType, accessToken: accessToken, needJsonContentType: needJsonContentType, completion: completion)
     }
 
+    public static func put(
+        url: URL, params: Data? = nil, concurrentType: ConcurrentType = .NonBlocking, accessToken: String? = nil, needJsonContentType: Bool = false, completion: @escaping Completion) {
+        FeedAgentManager.request(
+            url: url, params: params, method: .PUT, concurrentType: concurrentType, accessToken: accessToken, needJsonContentType: needJsonContentType, completion: completion)
+    }
+
+    public static func delete(
+        url: URL, params: Data? = nil, concurrentType: ConcurrentType = .NonBlocking, accessToken: String? = nil, needJsonContentType: Bool = false, completion: @escaping Completion) {
+        FeedAgentManager.request(
+            url: url, params: params, method: .DELETE, concurrentType: concurrentType, accessToken: accessToken, needJsonContentType: needJsonContentType, completion: completion)
+    }
+
     public static func get(
         url: URL, params: Data? = nil, concurrentType: ConcurrentType = .NonBlocking, accessToken: String? = nil, needJsonContentType: Bool = false, completion: @escaping Completion) {
         FeedAgentManager.request(
@@ -232,7 +245,10 @@ public protocol Agent {
     func logout(completion: @escaping FeedAgentManager.Completion)
     func requestAllArticlesByPage(unreadOnly:Bool, completion: @escaping FeedAgentManager.Completion)
     func requestMarking(entries: FeedAgentManager.Dict, type: FeedAgentManager.MarkingType, action: FeedAgentManager.MarkingAction, completion: @escaping FeedAgentManager.Completion)
-    func requestTagging(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion)
+    func requestTagging(entries: FeedAgentManager.Dict, tagNames: FeedAgentManager.Array, completion: @escaping FeedAgentManager.Completion)
+    func requestUnTagging(entyIds: FeedAgentManager.Array, tagNames: FeedAgentManager.Array, completion: @escaping FeedAgentManager.Completion)
+    func requestRenamingTag(tagId: String, label: String, completion: @escaping FeedAgentManager.Completion)
+    func requestTags(completion: @escaping FeedAgentManager.Completion)
     func requestSearching(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion)
     func requestAppendingCategory(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion)
     func requestCreatingNewCategory(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion)
@@ -374,7 +390,10 @@ public class Feedly: FeedAgent, Agent {
         "https://\(self.domain)/v3/profile"
     }
     
-
+    var tags_url: String {
+        "https://\(domain)/v3/tags"
+    }
+    
     public var agentType: FeedAgentManager.AgentType =
         FeedAgentManager.AgentType.Feedly
     
@@ -488,7 +507,7 @@ public class Feedly: FeedAgent, Agent {
     public func requestMarking(entries: FeedAgentManager.Dict, type: FeedAgentManager.MarkingType, action: FeedAgentManager.MarkingAction, completion: @escaping FeedAgentManager.Completion) {
         let markers_url: String =
             "https://\(domain)/v3/markers"
-        var params = [String: Any]()
+        var params = FeedAgentManager.Dict()
         params = params.merging(entries){$1}
         params["action"] = action.rawValue
         params["type"] = type.rawValue
@@ -509,8 +528,61 @@ public class Feedly: FeedAgent, Agent {
         }
     }
     
-    public func requestTagging(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion) {
+    public func requestTagging(entries: FeedAgentManager.Dict, tagNames: FeedAgentManager.Array,completion: @escaping FeedAgentManager.Completion) {
+        let tagNames =
+            tagNames.joined(separator: ",")
+                .addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)!
+        let tags_url: String =
+            "\(self.tags_url)/\(tagNames)"
+
+        var json:Data? = nil
+        do {
+            json = try JSONSerialization.data(withJSONObject: entries, options: [])
+        } catch (let error) {
+            completion(
+                .failure(
+                        FeedAgentManager.FeedError.requestError(error.localizedDescription)))
+        }
+
+        FeedAgentManager.put(
+            url: URL(
+                string: tags_url)!, params: json, concurrentType: .NonBlocking, accessToken: self.bearerToken, needJsonContentType: true) {result in
+            completion(result)
+        }
+    }
+    
+    public func requestUnTagging(entyIds: FeedAgentManager.Array, tagNames: FeedAgentManager.Array, completion: @escaping FeedAgentManager.Completion) {
         
+    }
+    
+    public func requestRenamingTag(tagId: String, label: String, completion: @escaping FeedAgentManager.Completion) {
+        let tags_url: String =
+            "\(self.tags_url)/\(tagId.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)!)"
+        let params = ["label": label]
+        
+        var json:Data? = nil
+        do {
+            json = try JSONSerialization.data(withJSONObject: params, options: [])
+        } catch (let error) {
+            completion(
+                .failure(
+                        FeedAgentManager.FeedError.requestError(error.localizedDescription)))
+        }
+
+        FeedAgentManager.post(
+            url: URL(
+                string: tags_url)!, params: json, concurrentType: .Blocking, accessToken: self.bearerToken, needJsonContentType: true) {result in
+            completion(result)
+        }
+
+    }
+    
+    public func requestTags(completion: @escaping FeedAgentManager.Completion) {
+        FeedAgentManager.get(
+            url: URL(
+                string: tags_url)!, concurrentType: .NonBlocking, accessToken: self.bearerToken) {result in
+            completion(result)
+        }
     }
     
     public func requestSearching(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion) {
