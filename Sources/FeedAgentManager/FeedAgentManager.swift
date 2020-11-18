@@ -245,10 +245,11 @@ public protocol Agent {
     func logout(completion: @escaping FeedAgentManager.Completion)
     func requestAllArticlesByPage(unreadOnly:Bool, completion: @escaping FeedAgentManager.Completion)
     func requestMarking(entries: FeedAgentManager.Dict, type: FeedAgentManager.MarkingType, action: FeedAgentManager.MarkingAction, completion: @escaping FeedAgentManager.Completion)
+    func requestUpdatingBoard(board: FeedAgentManager.Dict, tagId: String, completion: @escaping FeedAgentManager.Completion)
     func requestTagging(entries: FeedAgentManager.Dict, tagIds: FeedAgentManager.Array, completion: @escaping FeedAgentManager.Completion)
     func requestUnTagging(entyIds: FeedAgentManager.Array?, tagIds: FeedAgentManager.Array, completion: @escaping FeedAgentManager.Completion)
     func requestRenamingTag(tagId: String, label: String, completion: @escaping FeedAgentManager.Completion)
-    func requestTags(completion: @escaping FeedAgentManager.Completion)
+    func requestBoards(completion: @escaping FeedAgentManager.Completion)
     func requestSearching(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion)
     func requestAppendingCategory(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion)
     func requestCreatingNewCategory(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion)
@@ -394,6 +395,10 @@ public class Feedly: FeedAgent, Agent {
         "https://\(domain)/v3/tags"
     }
     
+    var boards_url: String {
+        "https://\(domain)/v3/boards"
+    }
+    
     public var agentType: FeedAgentManager.AgentType =
         FeedAgentManager.AgentType.Feedly
     
@@ -528,7 +533,29 @@ public class Feedly: FeedAgent, Agent {
         }
     }
     
-    public func requestTagging(entries: FeedAgentManager.Dict, tagIds: FeedAgentManager.Array,completion: @escaping FeedAgentManager.Completion) {
+    public func requestUpdatingBoard(board: FeedAgentManager.Dict, tagId: String = "", completion: @escaping FeedAgentManager.Completion) {
+        let tagId = tagId
+                .addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)!
+        let boards_url: String =
+            "\(self.boards_url)/\(tagId)"
+
+        var json:Data? = nil
+        do {
+            json = try JSONSerialization.data(withJSONObject: board, options: [])
+        } catch (let error) {
+            completion(
+                .failure(
+                        FeedAgentManager.FeedError.requestError(error.localizedDescription)))
+        }
+
+        FeedAgentManager.post(
+            url: URL(
+                string: boards_url)!, params: json, concurrentType: .NonBlocking, accessToken: self.bearerToken, needJsonContentType: true) {result in
+            completion(result)
+        }
+    }
+    
+    public func requestTagging(entries: FeedAgentManager.Dict, tagIds: FeedAgentManager.Array, completion: @escaping FeedAgentManager.Completion) {
         let tagIds =
             tagIds.joined(separator: ",")
                 .addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)!
@@ -563,13 +590,14 @@ public class Feedly: FeedAgent, Agent {
                 
         FeedAgentManager.delete(
             url: URL(
-                string: tags_url)!, concurrentType: .Blocking, accessToken: self.bearerToken, needJsonContentType: true) {result in
+                string: tags_url)!, concurrentType: .NonBlocking, accessToken: self.bearerToken, needJsonContentType: true) {result in
             completion(result)
         }
 
     }
     
-    public func requestRenamingTag(tagId: String, label: String, completion: @escaping FeedAgentManager.Completion) {
+    public func requestRenamingTag(tagId: String = "", label: String, completion: @escaping FeedAgentManager.Completion) {
+        //CAUSION: set the tagId paramter to empty string, if you will create a new tag.
         let tags_url: String =
             "\(self.tags_url)/\(tagId.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)!)"
         let params = ["label": label]
@@ -591,10 +619,10 @@ public class Feedly: FeedAgent, Agent {
 
     }
     
-    public func requestTags(completion: @escaping FeedAgentManager.Completion) {
+    public func requestBoards(completion: @escaping FeedAgentManager.Completion) {
         FeedAgentManager.get(
             url: URL(
-                string: tags_url)!, concurrentType: .NonBlocking, accessToken: self.bearerToken) {result in
+                string: boards_url)!, concurrentType: .NonBlocking, accessToken: self.bearerToken) {result in
             completion(result)
         }
     }
