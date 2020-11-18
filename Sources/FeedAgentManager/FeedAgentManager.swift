@@ -111,6 +111,7 @@ extension FeedAgentManager {
 extension FeedAgentManager {
     public typealias Dict = [String: Any]
     public typealias Array = [String]
+    public typealias DictInArray = [Dict]
     public typealias _URL = URL
     public typealias FeedAgentResult = Result<Any, FeedAgentManager.FeedError>
     public typealias Completion = (FeedAgentResult) -> Void
@@ -252,10 +253,10 @@ public protocol Agent {
     func requestRenamingTag(tagId: String, label: String, completion: @escaping FeedAgentManager.Completion)
     func requestBoards(completion: @escaping FeedAgentManager.Completion)
     func requestSearching(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion)
-    func requestAppendingCategory(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion)
-    func requestCreatingNewCategory(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion)
     func requestAllSavedArticles(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion)
     func requestUpdatingCategory(category: FeedAgentManager.Dict, categoryId: String, completion: @escaping FeedAgentManager.Completion)
+    func requestAppendingFeedsToCategory(feeds: FeedAgentManager.DictInArray, categoryId: String, completion: @escaping FeedAgentManager.Completion)
+    func requestRemovingFeedsToCategory(feeds: FeedAgentManager.DictInArray, categoryId: String, keepFeeds: Bool, completion: @escaping FeedAgentManager.Completion)
     func requestCategories(_ params: FeedAgentManager.Dict?, completion: @escaping FeedAgentManager.Completion)
 }
 
@@ -627,12 +628,43 @@ public class Feedly: FeedAgent, Agent {
 
         FeedAgentManager.post(
             url: URL(
-                string: categories_url)!, params: json, concurrentType: .Blocking, accessToken: self.bearerToken, needJsonContentType: true) {result in
+                string: categories_url)!, params: json, concurrentType: .NonBlocking, accessToken: self.bearerToken, needJsonContentType: true) {result in
             completion(result)
         }
     }
-
     
+    public func requestAppendingFeedsToCategory(feeds: FeedAgentManager.DictInArray, categoryId: String, completion: @escaping FeedAgentManager.Completion) {
+        let categoryId = categoryId
+                .addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)!
+        let categories_url: String =
+            "\(self.categories_url)/\(categoryId)/feeds/.mput"
+
+        let json = feeds.toJSON()
+
+        FeedAgentManager.post(
+            url: URL(
+                string: categories_url)!, params: json, concurrentType: .NonBlocking, accessToken: self.bearerToken, needJsonContentType: true) {result in
+            completion(result)
+        }
+    }
+    
+    public func requestRemovingFeedsToCategory(feeds: FeedAgentManager.DictInArray, categoryId: String, keepFeeds: Bool = false, completion: @escaping FeedAgentManager.Completion) {
+        let categoryId = categoryId
+                .addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)!
+        var categories_url: String =
+            "\(self.categories_url)/\(categoryId)/feeds/.mdelete"
+        let params = ["keepOrphanFeeds": keepFeeds]
+        categories_url = buildURLwithParams(url: categories_url, params: params)
+        let json = feeds.toJSON()
+
+        FeedAgentManager.delete(
+            url: URL(
+                string: categories_url)!, params: json, concurrentType: .NonBlocking, accessToken: self.bearerToken, needJsonContentType: true) {result in
+            completion(result)
+        }
+
+    }
+
     public func requestCategories(_ params: FeedAgentManager.Dict? = nil, completion: @escaping FeedAgentManager.Completion) {
         var categories_url = "\(self.categories_url)"
         if let params = params {
@@ -647,16 +679,6 @@ public class Feedly: FeedAgent, Agent {
     }
     
     public func requestSearching(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion) {
-        
-    }
-    
-    public func requestAppendingCategory(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion) {
-        
-        
-    }
-    
-    public func requestCreatingNewCategory(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion) {
-        
         
     }
     
@@ -696,6 +718,18 @@ extension FeedAgentManager.Dict {
         return params.joined(separator: "&")
     }
     
+    func toJSON() -> Data? {
+        var json:Data? = nil
+        do {
+            json = try JSONSerialization.data(withJSONObject: self, options: [])
+        } catch (_) {
+            return nil
+        }
+        return json
+    }
+}
+
+extension FeedAgentManager.DictInArray {
     func toJSON() -> Data? {
         var json:Data? = nil
         do {
