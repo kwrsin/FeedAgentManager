@@ -111,6 +111,7 @@ extension FeedAgentManager {
 extension FeedAgentManager {
     public typealias Dict = [String: Any]
     public typealias Array = [String]
+    public typealias _URL = URL
     public typealias FeedAgentResult = Result<Any, FeedAgentManager.FeedError>
     public typealias Completion = (FeedAgentResult) -> Void
 
@@ -305,7 +306,7 @@ public class FeedAgent {
         }
     }
     
-    func getURLwithParams(url: String, params: FeedAgentManager.Dict) -> String {
+    func buildURLwithParams(url: String, params: FeedAgentManager.Dict) -> String {
         let params = params.toParameters(needEncoding: true)
         return url.appending("/?\(params)")
     }
@@ -340,7 +341,6 @@ public class Feedly: FeedAgent, Agent {
     public var userId:String? {props["id"] as? String}
     var continuation:String? = nil
 
-    
     // response parameters
     var state: String { //TODO: not implemented yet
         get {
@@ -373,28 +373,16 @@ public class Feedly: FeedAgent, Agent {
                 "state": "\(self.state)"
             ]
 
-            return getURLwithParams(url: url, params: params)
+            return buildURLwithParams(url: url, params: params)
         }
     }
     
     public var access_token_url: String {
-        "https://\(self.domain)/\(self.tokenUrl)"
+        "https://\(domain)/\(self.tokenUrl)"
     }
     
     public var logout_url: String {
-        "https://\(self.domain)/\(self.logoutUrl)"
-    }
-    
-    var personal_collections_url: String {
-        "https://\(self.domain)/v3/collections"
-    }
-    
-    var mget_url: String {
-        "https://\(self.domain)/v3/entries/.mget"
-    }
-    
-    var profile_url: String {
-        "https://\(self.domain)/v3/profile"
+        "https://\(domain)/\(self.logoutUrl)"
     }
     
     var tags_url: String {
@@ -426,8 +414,8 @@ public class Feedly: FeedAgent, Agent {
         return false
     }
     
-    public func handleURL(url: URL) -> FeedAgentManager.FeedAgentResult {
-        self.redirectParams = url.params()
+    public func handleURL(url: FeedAgentManager._URL) -> FeedAgentManager.FeedAgentResult {
+        self.redirectParams = url.toDictionary()
         guard isRedirected() else {
             return Result.failure(FeedAgentManager.FeedError.parameterError)
         }
@@ -472,10 +460,12 @@ public class Feedly: FeedAgent, Agent {
     }
     
     public func requestProfile() -> FeedAgentManager.FeedAgentResult {
+        let profile_url: String =
+            "https://\(domain)/v3/profile"
         var faResult: FeedAgentManager.FeedAgentResult?
         FeedAgentManager.get(
             url: URL(
-                string: self.profile_url)!, concurrentType: .Blocking, accessToken: self.bearerToken) { result in
+                string: profile_url)!, concurrentType: .Blocking, accessToken: self.bearerToken) { result in
             faResult = result
         }
         store(result: faResult)
@@ -515,7 +505,7 @@ public class Feedly: FeedAgent, Agent {
             }
         }
         //TODO: rank?
-        streams_url = getURLwithParams(url: streams_url, params: params)
+        streams_url = buildURLwithParams(url: streams_url, params: params)
         FeedAgentManager.get(
             url: URL(
                 string: streams_url)!, concurrentType: .NonBlocking, accessToken: self.bearerToken) {result in
@@ -544,14 +534,7 @@ public class Feedly: FeedAgent, Agent {
         params["action"] = action.rawValue
         params["type"] = type.rawValue
        
-        var json:Data? = nil
-        do {
-            json = try JSONSerialization.data(withJSONObject: params, options: [])
-        } catch (let error) {
-            completion(
-                .failure(
-                        FeedAgentManager.FeedError.requestError(error.localizedDescription)))
-        }
+        let json:Data? = params.toJSON()
 
         FeedAgentManager.post(
             url: URL(
@@ -566,14 +549,7 @@ public class Feedly: FeedAgent, Agent {
         let boards_url: String =
             "\(self.boards_url)/\(tagId)"
 
-        var json:Data? = nil
-        do {
-            json = try JSONSerialization.data(withJSONObject: board, options: [])
-        } catch (let error) {
-            completion(
-                .failure(
-                        FeedAgentManager.FeedError.requestError(error.localizedDescription)))
-        }
+        let json = board.toJSON()
 
         FeedAgentManager.post(
             url: URL(
@@ -589,14 +565,7 @@ public class Feedly: FeedAgent, Agent {
         let tags_url: String =
             "\(self.tags_url)/\(tagIds)"
 
-        var json:Data? = nil
-        do {
-            json = try JSONSerialization.data(withJSONObject: entries, options: [])
-        } catch (let error) {
-            completion(
-                .failure(
-                        FeedAgentManager.FeedError.requestError(error.localizedDescription)))
-        }
+        let json = entries.toJSON()
 
         FeedAgentManager.put(
             url: URL(
@@ -627,16 +596,9 @@ public class Feedly: FeedAgent, Agent {
         //CAUSION: set the tagId paramter to empty string, if you will create a new tag.
         let tags_url: String =
             "\(self.tags_url)/\(tagId.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)!)"
-        let params = ["label": label]
+        let params:FeedAgentManager.Dict = ["label": label]
         
-        var json:Data? = nil
-        do {
-            json = try JSONSerialization.data(withJSONObject: params, options: [])
-        } catch (let error) {
-            completion(
-                .failure(
-                        FeedAgentManager.FeedError.requestError(error.localizedDescription)))
-        }
+        let json = params.toJSON()
 
         FeedAgentManager.post(
             url: URL(
@@ -657,7 +619,7 @@ public class Feedly: FeedAgent, Agent {
     public func requestCategories(_ params: FeedAgentManager.Dict? = nil, completion: @escaping FeedAgentManager.Completion) {
         var categories_url = "\(self.categories_url)"
         if let params = params {
-            categories_url = getURLwithParams(url: categories_url, params: params)
+            categories_url = buildURLwithParams(url: categories_url, params: params)
         }
 
         FeedAgentManager.get(
@@ -689,8 +651,8 @@ public class Feedly: FeedAgent, Agent {
 }
 
 //MARK: BUILTIN EXTENSIONS
-extension URL {
-    func params() -> FeedAgentManager.Dict {
+extension FeedAgentManager._URL {
+    func toDictionary() -> FeedAgentManager.Dict {
         var dict = FeedAgentManager.Dict()
         if let components = URLComponents(url: self, resolvingAgainstBaseURL: false) {
             if let items = components.queryItems {
@@ -715,6 +677,16 @@ extension FeedAgentManager.Dict {
                 .addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)!
         }
         return params.joined(separator: "&")
+    }
+    
+    func toJSON() -> Data? {
+        var json:Data? = nil
+        do {
+            json = try JSONSerialization.data(withJSONObject: self, options: [])
+        } catch (_) {
+            return nil
+        }
+        return json
     }
 }
 
