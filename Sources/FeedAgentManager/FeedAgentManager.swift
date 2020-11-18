@@ -229,7 +229,7 @@ extension FeedAgentManager {
 public protocol Agent {
     var agentType: FeedAgentManager.AgentType {get set}
     func handleURL(url: URL) -> FeedAgentManager.FeedAgentResult
-    func isValidResponse() -> Bool
+    func isRedirected() -> Bool
     var endpoint_url: String {get}
     var access_token_url: String {get}
     var accessToken:String? {get}
@@ -344,7 +344,7 @@ public class Feedly: FeedAgent, Agent {
     // response parameters
     var state: String { //TODO: not implemented yet
         get {
-            if let params = params, let state = params["state"] as? String {
+            if let params = redirectParams, let state = params["state"] as? String {
                 return state
             } else if let state = props["state"] as? String {
                 return state
@@ -354,27 +354,27 @@ public class Feedly: FeedAgent, Agent {
     }
     var code: String {
         get {
-            if let params = params, let code = params["code"] as? String {
+            if let params = redirectParams, let code = params["code"] as? String {
                 return code
             }
             return ""
         }
     }
-    var params: FeedAgentManager.Dict?
+    var redirectParams: FeedAgentManager.Dict?
 
-    var access_token_params: String {
-        "client_id=\(self.clientId)&client_secret=\(self.clientSecret)" +
-        "&redirect_uri=\(self.redirectUrl)&code=\(self.code)&state=\(self.state)&grant_type=authorization_code"
-    }
-    
-    var refresh_token_params: String {
-        "client_id=\(self.clientId)&client_secret=\(self.clientSecret)" +
-        "&refresh_token=\(self.refreshToken!)&grant_type=refresh_token"
-    }
-    
     public var endpoint_url: String {
-        "https://\(self.domain)/\(self.authenticationUrl)?client_id=\(self.clientId)" +
-        "&redirect_uri=\(self.redirectUrl)&response_type=\(self.responseType)&scope=\(self.scope)&state=\(self.state)"
+        get {
+            let url = "https://\(self.domain)/\(self.authenticationUrl)"
+            let params:FeedAgentManager.Dict = [
+                "client_id": "\(self.clientId)",
+                "redirect_uri": "\(self.redirectUrl)",
+                "response_type": "\(self.responseType)",
+                "scope": "\(self.scope)",
+                "state": "\(self.state)"
+            ]
+
+            return getURLwithParams(url: url, params: params)
+        }
     }
     
     public var access_token_url: String {
@@ -419,26 +419,34 @@ public class Feedly: FeedAgent, Agent {
         return Date.timeIntervalSinceReferenceDate > createdAt + expiresIn
     }
 
-    public func isValidResponse() -> Bool {
-        if let params = self.params {
+    public func isRedirected() -> Bool {
+        if let params = self.redirectParams {
             return params["error"] == nil
         }
         return false
     }
     
     public func handleURL(url: URL) -> FeedAgentManager.FeedAgentResult {
-        self.params = url.params()
-        guard isValidResponse() else {
+        self.redirectParams = url.params()
+        guard isRedirected() else {
             return Result.failure(FeedAgentManager.FeedError.parameterError)
         }
         return requestAccessToken()
     }
     
     public func requestAccessToken() -> FeedAgentManager.FeedAgentResult {
+        let params:FeedAgentManager.Dict = [
+            "client_id": "\(self.clientId)",
+            "client_secret": "\(self.clientSecret)",
+            "redirect_uri": "\(self.redirectUrl)",
+            "code": "\(self.code)",
+            "state": "\(self.state)",
+            "grant_type": "authorization_code"
+        ]
         var faResult: FeedAgentManager.FeedAgentResult?
         FeedAgentManager.post(
             url: URL(
-                string: self.access_token_url)!, params: self.access_token_params.data(using: .utf8), concurrentType: .Blocking) { result in
+                string: self.access_token_url)!, params: params.toParameters().data(using: .utf8), concurrentType: .Blocking) { result in
             faResult = result
         }
         store(result: faResult)
@@ -446,10 +454,17 @@ public class Feedly: FeedAgent, Agent {
     }
 
     public func requestNewAccessToken() -> FeedAgentManager.FeedAgentResult {
+        let params:FeedAgentManager.Dict = [
+            "client_id": "\(self.clientId)",
+            "client_secret": "\(self.clientSecret)",
+            "refresh_token": "\(self.refreshToken!)",
+            "grant_type": "refresh_token",
+        ]
+
         var faResult: FeedAgentManager.FeedAgentResult?
         FeedAgentManager.post(
             url: URL(
-                string: self.access_token_url)!, params: self.refresh_token_params.data(using: .utf8), concurrentType: .Blocking) { result in
+                string: self.access_token_url)!, params: params.toParameters().data(using: .utf8), concurrentType: .Blocking) { result in
             faResult = result
         }
         store(result: faResult)
