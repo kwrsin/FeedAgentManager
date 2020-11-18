@@ -255,6 +255,7 @@ public protocol Agent {
     func requestAppendingCategory(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion)
     func requestCreatingNewCategory(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion)
     func requestAllSavedArticles(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion)
+    func requestUpdatingCategory(category: FeedAgentManager.Dict, categoryId: String, completion: @escaping FeedAgentManager.Completion)
     func requestCategories(_ params: FeedAgentManager.Dict?, completion: @escaping FeedAgentManager.Completion)
 }
 
@@ -615,6 +616,22 @@ public class Feedly: FeedAgent, Agent {
             completion(result)
         }
     }
+    
+    public func requestUpdatingCategory(category: FeedAgentManager.Dict, categoryId: String = "", completion: @escaping FeedAgentManager.Completion) {
+        let categoryId = categoryId
+                .addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)!
+        let categories_url: String =
+            "\(self.categories_url)/\(categoryId)"
+
+        let json = category.toJSON()
+
+        FeedAgentManager.post(
+            url: URL(
+                string: categories_url)!, params: json, concurrentType: .Blocking, accessToken: self.bearerToken, needJsonContentType: true) {result in
+            completion(result)
+        }
+    }
+
     
     public func requestCategories(_ params: FeedAgentManager.Dict? = nil, completion: @escaping FeedAgentManager.Completion) {
         var categories_url = "\(self.categories_url)"
