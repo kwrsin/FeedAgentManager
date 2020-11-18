@@ -254,6 +254,7 @@ public protocol Agent {
     func requestAppendingCategory(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion)
     func requestCreatingNewCategory(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion)
     func requestAllSavedArticles(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion)
+    func requestCategories(_ params: FeedAgentManager.Dict?, completion: @escaping FeedAgentManager.Completion)
 }
 
 public class FeedAgent {
@@ -302,6 +303,11 @@ public class FeedAgent {
                 break
             }
         }
+    }
+    
+    func getURLwithParams(url: String, params: FeedAgentManager.Dict) -> String {
+        let params = params.toParameters(needEncoding: true)
+        return url.appending("/?\(params)")
     }
 }
 
@@ -399,6 +405,10 @@ public class Feedly: FeedAgent, Agent {
         "https://\(domain)/v3/boards"
     }
     
+    var categories_url: String {
+        "https://\(domain)/v3/collections"
+    }
+    
     public var agentType: FeedAgentManager.AgentType =
         FeedAgentManager.AgentType.Feedly
     
@@ -474,21 +484,23 @@ public class Feedly: FeedAgent, Agent {
     public func requestAllArticlesByPage(unreadOnly: Bool = false, completion: @escaping FeedAgentManager.Completion) {
         let streamId = "user/\(userId!)/category/global.all"
         var streams_url: String =
-            "https://\(domain)/v3/streams/contents?streamId=\(streamId)&count=\(self.pageCount)&"
-
+            "https://\(domain)/v3/streams/contents"
+        var params = [
+            "streamId": streamId,
+            "count": "\(self.pageCount)"]
         if unreadOnly == true {
-            streams_url.append("unreadOnly=true&")
+            params["unreadOnly"] = "true"
         }
         if let continuation = continuation, continuation.isEmpty == false {
-            streams_url.append("continuation=\(continuation)&")
+            params["continuation"] = continuation
         } else {
             //TODO: need preventNewerThan?
             if let newerThan = props["entries_newerThan"] as? Int64, newerThan > 0 {
-                streams_url.append("newerThan=\(newerThan + 1)&")
+                params["newerThan"] = "\(newerThan + 1)"
             }
         }
         //TODO: rank?
-
+        streams_url = getURLwithParams(url: streams_url, params: params)
         FeedAgentManager.get(
             url: URL(
                 string: streams_url)!, concurrentType: .NonBlocking, accessToken: self.bearerToken) {result in
@@ -627,6 +639,19 @@ public class Feedly: FeedAgent, Agent {
         }
     }
     
+    public func requestCategories(_ params: FeedAgentManager.Dict? = nil, completion: @escaping FeedAgentManager.Completion) {
+        var categories_url = "\(self.categories_url)"
+        if let params = params {
+            categories_url = getURLwithParams(url: categories_url, params: params)
+        }
+
+        FeedAgentManager.get(
+            url: URL(
+                string: categories_url)!, concurrentType: .NonBlocking, accessToken: self.bearerToken) {result in
+            completion(result)
+        }
+    }
+    
     public func requestSearching(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion) {
         
     }
@@ -661,6 +686,20 @@ extension URL {
             return dict
         }
         return dict
+    }
+}
+
+extension FeedAgentManager.Dict {
+    func toParameters(needEncoding: Bool = false) -> String {
+        var params = [String]()
+        self.forEach() {key, value in
+            params.append("\(key)=\(value)")
+        }
+        if needEncoding {
+            return params.joined(separator: "&")
+                .addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)!
+        }
+        return params.joined(separator: "&")
     }
 }
 
