@@ -258,6 +258,7 @@ public protocol Agent {
     var expiresIn:TimeInterval? {get}
     var isExpired: Bool {get}
     var userId:String? {get}
+    var attachmentName:String? {get}
     
     func requestAccessToken() -> FeedAgentManager.FeedAgentResult
     func requestNewAccessToken() -> FeedAgentManager.FeedAgentResult
@@ -277,7 +278,7 @@ public protocol Agent {
     func requestRemovingFeedsToCategory(feeds: FeedAgentManager.DictInArray, categoryId: String, keepFeeds: Bool, completion: @escaping FeedAgentManager.Completion)
     func requestCategories(_ params: FeedAgentManager.Dict?, completion: @escaping FeedAgentManager.Completion)
     func requestRemovingCategory(categoryId: String, completion: @escaping FeedAgentManager.Completion)
-    func uploadImage(url: String, params: FeedAgentManager.Dict?, attachment: FeedAgentManager.Attachment, id: String, completion: @escaping FeedAgentManager.Completion)
+    func uploadImage(path: String, params: FeedAgentManager.Dict?, attachment: FeedAgentManager.Attachment, id: String, completion: @escaping FeedAgentManager.Completion)
 }
 
 public class FeedAgent {
@@ -285,16 +286,12 @@ public class FeedAgent {
     let cfg: FeedAgentManager.Dict
     let strageKey: String
     var props: StrageManager.Properties
-    var attachmentName: String? = "cover"
     
-    init(type: StrageManager.StrageType, configurations: FeedAgentManager.Dict, _ attachmentName: String? = nil) {
+    init(type: StrageManager.StrageType, configurations: FeedAgentManager.Dict) {
         self.strage = StrageManager.shared(type).strage
         self.cfg = configurations
         self.strageKey = cfg["strage_key"] as! String
         self.props = self.strage.loadProperties(key: self.strageKey) ?? [:]
-        if let attachmentName = attachmentName {
-            self.attachmentName = attachmentName
-        }
     }
     
     func updateProperties(properties: StrageManager.Properties, needCreateAt: Bool = false) {
@@ -341,12 +338,12 @@ public class FeedAgent {
         return "------------------------------\(UUID().uuidString)"
     }
     
-    func generateMultipartData(boundary: String, params: FeedAgentManager.Dict?, attachment: FeedAgentManager.Attachment) -> Data {
+    func generateMultipartData(boundary: String, params: FeedAgentManager.Dict?, attachmentName:String, attachment: FeedAgentManager.Attachment) -> Data {
         let lineBreak = "\r\n"
         var requestData = Data()
         
         requestData.append("--\(boundary + lineBreak)".data(using: .utf8)!)
-        requestData.append("content-disposition: form-data; name=\"\(self.attachmentName!)\" ; filename=\"\(attachment.filename)\"\(lineBreak)".data(using: .utf8)!)
+        requestData.append("content-disposition: form-data; name=\"\(attachmentName)\" ; filename=\"\(attachment.filename)\"\(lineBreak)".data(using: .utf8)!)
 //        requestData.append("content-type: \(attachment.mimetype)\(lineBreak)".data(using: .utf8)!)
         requestData.append("\(lineBreak)".data(using: .utf8)!)
         requestData.append(attachment.data)
@@ -367,6 +364,7 @@ public class FeedAgent {
 
 //MARK: Feedly
 public class Feedly: FeedAgent, Agent {
+    public var attachmentName: String? = "cover"
     // configurations
     var clientId:String {cfg["client_id"] as! String}
     var clientSecret:String {cfg["client_secret"] as! String}
@@ -742,13 +740,13 @@ public class Feedly: FeedAgent, Agent {
         }
     }
     
-    public func uploadImage(url: String, params: FeedAgentManager.Dict?, attachment: FeedAgentManager.Attachment, id: String, completion: @escaping FeedAgentManager.Completion) {
+    public func uploadImage(path: String, params: FeedAgentManager.Dict?, attachment: FeedAgentManager.Attachment, id: String, completion: @escaping FeedAgentManager.Completion) {
         let id = id
                 .addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)!
         let upload_url: String =
-            "https://\(domain)/\(url)/\(id)"
+            "https://\(domain)/\(path)/\(id)"
         let boundary = generateBoundaryString()
-        let multipleData = generateMultipartData(boundary: boundary, params: params, attachment: attachment)
+        let multipleData = generateMultipartData(boundary: boundary, params: params, attachmentName: attachmentName!, attachment: attachment)
 
         FeedAgentManager.post(
             url: URL(
