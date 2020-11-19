@@ -258,6 +258,7 @@ public protocol Agent {
     func requestAppendingFeedsToCategory(feeds: FeedAgentManager.DictInArray, categoryId: String, completion: @escaping FeedAgentManager.Completion)
     func requestRemovingFeedsToCategory(feeds: FeedAgentManager.DictInArray, categoryId: String, keepFeeds: Bool, completion: @escaping FeedAgentManager.Completion)
     func requestCategories(_ params: FeedAgentManager.Dict?, completion: @escaping FeedAgentManager.Completion)
+    func requestRemovingCategory(categoryId: String, completion: @escaping FeedAgentManager.Completion)
 }
 
 public class FeedAgent {
@@ -663,6 +664,19 @@ public class Feedly: FeedAgent, Agent {
             completion(result)
         }
 
+    }
+
+    public func requestRemovingCategory(categoryId: String, completion: @escaping FeedAgentManager.Completion) {
+        var category_url = "https://\(domain)/v3/categories"
+        let categoryId = categoryId
+                .addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)!
+        category_url = "\(category_url)/\(categoryId)"
+
+        FeedAgentManager.delete(
+            url: URL(
+                string: category_url)!, concurrentType: .NonBlocking, accessToken: self.bearerToken, needJsonContentType: true) {result in
+            completion(result)
+        }
     }
 
     public func requestCategories(_ params: FeedAgentManager.Dict? = nil, completion: @escaping FeedAgentManager.Completion) {
