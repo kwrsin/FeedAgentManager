@@ -80,10 +80,12 @@ extension FeedAgentManager {
         case PUT
         case DELETE
     }
+    
     public enum ResultType {
         case Single
         case Multiple
     }
+    
     public enum ConcurrentType {
         case Blocking
         case NonBlocking
@@ -104,6 +106,12 @@ extension FeedAgentManager {
         case categories
         case tags
     }
+    
+    public enum ContentType {
+        case json
+        case multipart
+        case none
+    }
 
 }
 
@@ -115,7 +123,7 @@ extension FeedAgentManager {
     public typealias _URL = URL
     public typealias FeedAgentResult = Result<Any, FeedAgentManager.FeedError>
     public typealias Completion = (FeedAgentResult) -> Void
-
+    public typealias Attachment =  (data: Data, filename: String, mimeType: String)
     public static func getResponseError(values: Any) -> Dict? {
         let errors = values as? Dict ?? [:]
         if errors["errorCode"] != nil {
@@ -171,12 +179,22 @@ extension FeedAgentManager {
     }
     
     public static func request(
-        url: URL, params: Data? = nil, method: HttpMethod = .POST, concurrentType: ConcurrentType = .NonBlocking ,accessToken: String? = nil, needJsonContentType: Bool = false, completion: @escaping Completion) {
+        url: URL, params: Data? = nil, method: HttpMethod = .POST, concurrentType: ConcurrentType = .NonBlocking ,accessToken: String? = nil, contentType: FeedAgentManager.ContentType = .none, boundary: String? = nil, completion: @escaping Completion) {
         var request = URLRequest(url: url)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if needJsonContentType {
+        
+        switch contentType {
+        case .json:
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        case .multipart:
+            if let boundary = boundary, let params = params {
+                request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+                request.setValue("\(params.count)", forHTTPHeaderField: "Content-Length")
+            }
+        default:
+            break
         }
+        
         if let accessToken = accessToken {
             request.setValue(accessToken, forHTTPHeaderField: "Authorization")
         }
@@ -202,27 +220,27 @@ extension FeedAgentManager {
     }
     
     public static func post(
-        url: URL, params: Data? = nil, concurrentType: ConcurrentType = .NonBlocking, accessToken: String? = nil, needJsonContentType: Bool = false, completion: @escaping Completion) {
+        url: URL, params: Data? = nil, concurrentType: ConcurrentType = .NonBlocking, accessToken: String? = nil, contentType: ContentType = .none, boundary: String? = nil, completion: @escaping Completion) {
         FeedAgentManager.request(
-            url: url, params: params, method: .POST, concurrentType: concurrentType, accessToken: accessToken, needJsonContentType: needJsonContentType, completion: completion)
+            url: url, params: params, method: .POST, concurrentType: concurrentType, accessToken: accessToken, contentType: contentType, boundary: boundary, completion: completion)
     }
 
     public static func put(
-        url: URL, params: Data? = nil, concurrentType: ConcurrentType = .NonBlocking, accessToken: String? = nil, needJsonContentType: Bool = false, completion: @escaping Completion) {
+        url: URL, params: Data? = nil, concurrentType: ConcurrentType = .NonBlocking, accessToken: String? = nil, contentType: ContentType = .none, completion: @escaping Completion) {
         FeedAgentManager.request(
-            url: url, params: params, method: .PUT, concurrentType: concurrentType, accessToken: accessToken, needJsonContentType: needJsonContentType, completion: completion)
+            url: url, params: params, method: .PUT, concurrentType: concurrentType, accessToken: accessToken, contentType: contentType, completion: completion)
     }
 
     public static func delete(
-        url: URL, params: Data? = nil, concurrentType: ConcurrentType = .NonBlocking, accessToken: String? = nil, needJsonContentType: Bool = false, completion: @escaping Completion) {
+        url: URL, params: Data? = nil, concurrentType: ConcurrentType = .NonBlocking, accessToken: String? = nil, contentType: ContentType = .none, completion: @escaping Completion) {
         FeedAgentManager.request(
-            url: url, params: params, method: .DELETE, concurrentType: concurrentType, accessToken: accessToken, needJsonContentType: needJsonContentType, completion: completion)
+            url: url, params: params, method: .DELETE, concurrentType: concurrentType, accessToken: accessToken, contentType: contentType, completion: completion)
     }
 
     public static func get(
-        url: URL, params: Data? = nil, concurrentType: ConcurrentType = .NonBlocking, accessToken: String? = nil, needJsonContentType: Bool = false, completion: @escaping Completion) {
+        url: URL, params: Data? = nil, concurrentType: ConcurrentType = .NonBlocking, accessToken: String? = nil, contentType: ContentType = .none, completion: @escaping Completion) {
         FeedAgentManager.request(
-            url: url, params: params, method: .GET, concurrentType: concurrentType, accessToken: accessToken, needJsonContentType:needJsonContentType, completion: completion)
+            url: url, params: params, method: .GET, concurrentType: concurrentType, accessToken: accessToken, contentType:contentType, completion: completion)
     }
 
 }
@@ -259,6 +277,7 @@ public protocol Agent {
     func requestRemovingFeedsToCategory(feeds: FeedAgentManager.DictInArray, categoryId: String, keepFeeds: Bool, completion: @escaping FeedAgentManager.Completion)
     func requestCategories(_ params: FeedAgentManager.Dict?, completion: @escaping FeedAgentManager.Completion)
     func requestRemovingCategory(categoryId: String, completion: @escaping FeedAgentManager.Completion)
+    func uploadImage(url: String, params: FeedAgentManager.Dict?, attachment: FeedAgentManager.Attachment, id: String, completion: @escaping FeedAgentManager.Completion)
 }
 
 public class FeedAgent {
@@ -266,12 +285,16 @@ public class FeedAgent {
     let cfg: FeedAgentManager.Dict
     let strageKey: String
     var props: StrageManager.Properties
+    var attachmentName: String? = "cover"
     
-    init(type: StrageManager.StrageType, configurations: FeedAgentManager.Dict) {
+    init(type: StrageManager.StrageType, configurations: FeedAgentManager.Dict, _ attachmentName: String? = nil) {
         self.strage = StrageManager.shared(type).strage
         self.cfg = configurations
         self.strageKey = cfg["strage_key"] as! String
         self.props = self.strage.loadProperties(key: self.strageKey) ?? [:]
+        if let attachmentName = attachmentName {
+            self.attachmentName = attachmentName
+        }
     }
     
     func updateProperties(properties: StrageManager.Properties, needCreateAt: Bool = false) {
@@ -312,6 +335,33 @@ public class FeedAgent {
     func buildURLwithParams(url: String, params: FeedAgentManager.Dict) -> String {
         let params = params.toParameters(needEncoding: true)
         return url.appending("/?\(params)")
+    }
+    
+    func generateBoundaryString() -> String {
+        return "------------------------------\(UUID().uuidString)"
+    }
+    
+    func generateMultipartData(boundary: String, params: FeedAgentManager.Dict?, attachment: FeedAgentManager.Attachment) -> Data {
+        let lineBreak = "\r\n"
+        var requestData = Data()
+        
+        requestData.append("--\(boundary + lineBreak)".data(using: .utf8)!)
+        requestData.append("content-disposition: form-data; name=\"\(self.attachmentName!)\" ; filename=\"\(attachment.filename)\"\(lineBreak)".data(using: .utf8)!)
+//        requestData.append("content-type: \(attachment.mimetype)\(lineBreak)".data(using: .utf8)!)
+        requestData.append("\(lineBreak)".data(using: .utf8)!)
+        requestData.append(attachment.data)
+        
+        requestData.append("\(lineBreak)".data(using: .utf8)!)
+        if let params = params {
+            for (key, value) in params {
+                requestData.append("--\(boundary + lineBreak)".data(using: .utf8)!)
+                requestData.append("content-disposition: form-data; name=\"\(key)\"\(lineBreak + lineBreak)".data(using: .utf8)!)
+                requestData.append("\(value)\(lineBreak)".data(using: .utf8)!)
+            }
+        }
+        requestData.append("--\(boundary)--\(lineBreak)" .data(using: .utf8)!)
+//        print(String(decoding: requestData, as: UTF8.self))
+        return requestData
     }
 }
 
@@ -541,7 +591,7 @@ public class Feedly: FeedAgent, Agent {
 
         FeedAgentManager.post(
             url: URL(
-                string: markers_url)!, params: json, concurrentType: .NonBlocking, accessToken: self.bearerToken, needJsonContentType: true) {result in
+                string: markers_url)!, params: json, concurrentType: .NonBlocking, accessToken: self.bearerToken, contentType: .json) {result in
             completion(result)
         }
     }
@@ -556,7 +606,7 @@ public class Feedly: FeedAgent, Agent {
 
         FeedAgentManager.post(
             url: URL(
-                string: boards_url)!, params: json, concurrentType: .NonBlocking, accessToken: self.bearerToken, needJsonContentType: true) {result in
+                string: boards_url)!, params: json, concurrentType: .NonBlocking, accessToken: self.bearerToken, contentType: .json) {result in
             completion(result)
         }
     }
@@ -572,7 +622,7 @@ public class Feedly: FeedAgent, Agent {
 
         FeedAgentManager.put(
             url: URL(
-                string: tags_url)!, params: json, concurrentType: .NonBlocking, accessToken: self.bearerToken, needJsonContentType: true) {result in
+                string: tags_url)!, params: json, concurrentType: .NonBlocking, accessToken: self.bearerToken, contentType: .json) {result in
             completion(result)
         }
     }
@@ -589,7 +639,7 @@ public class Feedly: FeedAgent, Agent {
                 
         FeedAgentManager.delete(
             url: URL(
-                string: tags_url)!, concurrentType: .NonBlocking, accessToken: self.bearerToken, needJsonContentType: true) {result in
+                string: tags_url)!, concurrentType: .NonBlocking, accessToken: self.bearerToken, contentType: .json) {result in
             completion(result)
         }
 
@@ -605,7 +655,7 @@ public class Feedly: FeedAgent, Agent {
 
         FeedAgentManager.post(
             url: URL(
-                string: tags_url)!, params: json, concurrentType: .NonBlocking, accessToken: self.bearerToken, needJsonContentType: true) {result in
+                string: tags_url)!, params: json, concurrentType: .NonBlocking, accessToken: self.bearerToken, contentType: .json) {result in
             completion(result)
         }
 
@@ -629,7 +679,7 @@ public class Feedly: FeedAgent, Agent {
 
         FeedAgentManager.post(
             url: URL(
-                string: categories_url)!, params: json, concurrentType: .NonBlocking, accessToken: self.bearerToken, needJsonContentType: true) {result in
+                string: categories_url)!, params: json, concurrentType: .NonBlocking, accessToken: self.bearerToken, contentType: .json) {result in
             completion(result)
         }
     }
@@ -644,7 +694,7 @@ public class Feedly: FeedAgent, Agent {
 
         FeedAgentManager.post(
             url: URL(
-                string: categories_url)!, params: json, concurrentType: .NonBlocking, accessToken: self.bearerToken, needJsonContentType: true) {result in
+                string: categories_url)!, params: json, concurrentType: .NonBlocking, accessToken: self.bearerToken, contentType: .json) {result in
             completion(result)
         }
     }
@@ -660,7 +710,7 @@ public class Feedly: FeedAgent, Agent {
 
         FeedAgentManager.delete(
             url: URL(
-                string: categories_url)!, params: json, concurrentType: .NonBlocking, accessToken: self.bearerToken, needJsonContentType: true) {result in
+                string: categories_url)!, params: json, concurrentType: .NonBlocking, accessToken: self.bearerToken, contentType: .json) {result in
             completion(result)
         }
 
@@ -674,7 +724,7 @@ public class Feedly: FeedAgent, Agent {
 
         FeedAgentManager.delete(
             url: URL(
-                string: category_url)!, concurrentType: .NonBlocking, accessToken: self.bearerToken, needJsonContentType: true) {result in
+                string: category_url)!, concurrentType: .NonBlocking, accessToken: self.bearerToken, contentType: .json) {result in
             completion(result)
         }
     }
@@ -688,6 +738,21 @@ public class Feedly: FeedAgent, Agent {
         FeedAgentManager.get(
             url: URL(
                 string: categories_url)!, concurrentType: .NonBlocking, accessToken: self.bearerToken) {result in
+            completion(result)
+        }
+    }
+    
+    public func uploadImage(url: String, params: FeedAgentManager.Dict?, attachment: FeedAgentManager.Attachment, id: String, completion: @escaping FeedAgentManager.Completion) {
+        let id = id
+                .addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)!
+        let upload_url: String =
+            "https://\(domain)/\(url)/\(id)"
+        let boundary = generateBoundaryString()
+        let multipleData = generateMultipartData(boundary: boundary, params: params, attachment: attachment)
+
+        FeedAgentManager.post(
+            url: URL(
+                string: upload_url)!, params: multipleData, concurrentType: .NonBlocking, accessToken: self.bearerToken, contentType: .multipart, boundary: boundary) {result in
             completion(result)
         }
     }
