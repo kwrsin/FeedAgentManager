@@ -22,7 +22,7 @@
 			<string>test://</string>
 			<key>page_count</key>
 			<integer>20</integer>
-			<key>strage_key</key>
+			<key>storage_key</key>
 			<string>feed_manager</string>
 		</dict>
 	</dict>
