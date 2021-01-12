@@ -21,10 +21,10 @@ final class FeedAgentManagerTests: XCTestCase {
             "aaaa": 12,
             "bb": "1234"
         ]
-        StrageManager.shared().strage.storeProperties(key: "mykey", dict: dic)
+        StorageManager.shared().strage.storeProperties(key: "mykey", dict: dic)
         
         
-        if let values = StrageManager.shared().strage.loadProperties(key: "mykey")! as [String: Any]? {
+        if let values = StorageManager.shared().strage.loadProperties(key: "mykey")! as [String: Any]? {
             print("ans = \(values)")
             XCTAssertTrue(values.isEmpty == false)
 

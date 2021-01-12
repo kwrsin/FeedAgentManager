@@ -4,7 +4,7 @@ public class FeedAgentManager {
     private static var feedManager: FeedAgentManager?
     public let agent: Agent
     private init(_ type: FeedAgentManager.AgentType = FeedAgentManager.AgentType.Feedly,
-                 _ strage: StrageManager.StrageType = StrageManager.StrageType.UserDefaults,
+                 _ strage: StorageManager.StorageType = StorageManager.StorageType.UserDefaults,
                  _ clientId:String? = nil,
                  _ clientSecret:String? = nil) {
         func getConfigurations(
@@ -37,7 +37,7 @@ public class FeedAgentManager {
      }
     
     public static func shared(_ type: FeedAgentManager.AgentType = FeedAgentManager.AgentType.Feedly,
-                              _ strage: StrageManager.StrageType = StrageManager.StrageType.UserDefaults,
+                              _ strage: StorageManager.StorageType = StorageManager.StorageType.UserDefaults,
                               _ clientId: String? = nil,
                               _ clientSecret: String? = nil) -> FeedAgentManager {
         if let feedManager: FeedAgentManager = FeedAgentManager.feedManager, feedManager.agent.agentType == type {
@@ -282,19 +282,19 @@ public protocol Agent {
 }
 
 public class FeedAgent {
-    let strage: Strage
+    let strage: Storage
     let cfg: FeedAgentManager.Dict
     let strageKey: String
-    var props: StrageManager.Properties
+    var props: StorageManager.Properties
     
-    init(type: StrageManager.StrageType, configurations: FeedAgentManager.Dict) {
-        self.strage = StrageManager.shared(type).strage
+    init(type: StorageManager.StorageType, configurations: FeedAgentManager.Dict) {
+        self.strage = StorageManager.shared(type).storage
         self.cfg = configurations
         self.strageKey = cfg["strage_key"] as! String
         self.props = self.strage.loadProperties(key: self.strageKey) ?? [:]
     }
     
-    func updateProperties(properties: StrageManager.Properties, needCreateAt: Bool = false) {
+    func updateProperties(properties: StorageManager.Properties, needCreateAt: Bool = false) {
         props = props.merging(properties){$1}
         if needCreateAt {
             props["created_at"] = Date.timeIntervalSinceReferenceDate
@@ -322,7 +322,7 @@ public class FeedAgent {
         if let resut = result {
             switch resut {
             case .success(let dict):
-                updateProperties(properties: dict as! StrageManager.Properties, needCreateAt: true)
+                updateProperties(properties: dict as! StorageManager.Properties, needCreateAt: true)
             case .failure(_):
                 break
             }
