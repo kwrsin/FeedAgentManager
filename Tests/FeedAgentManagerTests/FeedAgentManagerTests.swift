@@ -16,7 +16,7 @@ final class FeedAgentManagerTests: XCTestCase {
 //        }
 //
 //    }
-    func testStrageUserDefaults_reading_row() {
+    func testStorageUserDefaults_reading_row() {
         let dic :[String: Any] = [
             "aaaa": 12,
             "bb": "1234"

@@ -4,7 +4,7 @@ public class FeedAgentManager {
     private static var feedManager: FeedAgentManager?
     public let agent: Agent
     private init(_ type: FeedAgentManager.AgentType = FeedAgentManager.AgentType.Feedly,
-                 _ strage: StorageManager.StorageType = StorageManager.StorageType.UserDefaults,
+                 _ storage: StorageManager.StorageType = StorageManager.StorageType.UserDefaults,
                  _ clientId:String? = nil,
                  _ clientSecret:String? = nil) {
         func getConfigurations(
@@ -30,9 +30,9 @@ public class FeedAgentManager {
             clientId: clientId, clientSecret: clientSecret)!
         switch type {
         case .Feedly:
-            agent = Feedly(type: strage, configurations: configurations)
+            agent = Feedly(type: storage, configurations: configurations)
         default:
-            agent = Feedly(type: strage, configurations: configurations)
+            agent = Feedly(type: storage, configurations: configurations)
         }
      }
     
@@ -282,16 +282,16 @@ public protocol Agent {
 }
 
 public class FeedAgent {
-    let strage: Storage
+    let storage: Storage
     let cfg: FeedAgentManager.Dict
-    let strageKey: String
+    let storageKey: String
     var props: StorageManager.Properties
     
     init(type: StorageManager.StorageType, configurations: FeedAgentManager.Dict) {
-        self.strage = StorageManager.shared(type).storage
+        self.storage = StorageManager.shared(type).storage
         self.cfg = configurations
-        self.strageKey = cfg["strage_key"] as! String
-        self.props = self.strage.loadProperties(key: self.strageKey) ?? [:]
+        self.storageKey = cfg["storage_key"] as! String
+        self.props = self.storage.loadProperties(key: self.storageKey) ?? [:]
     }
     
     func updateProperties(properties: StorageManager.Properties, needCreateAt: Bool = false) {
@@ -299,12 +299,12 @@ public class FeedAgent {
         if needCreateAt {
             props["created_at"] = Date.timeIntervalSinceReferenceDate
         }
-        self.strage.storeProperties(key: self.strageKey, dict: props)
+        self.storage.storeProperties(key: self.storageKey, dict: props)
     }
         
     func clearProperties() {
         props.removeAll()
-        self.strage.storeProperties(key: self.strageKey, dict: props)
+        self.storage.storeProperties(key: self.storageKey, dict: props)
     }
     
     func clear(result: FeedAgentManager.FeedAgentResult?) {
