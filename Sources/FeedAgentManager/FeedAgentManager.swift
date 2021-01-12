@@ -4,7 +4,7 @@ public class FeedAgentManager {
     private static var feedManager: FeedAgentManager?
     public let agent: Agent
     private init(_ type: FeedAgentManager.AgentType = FeedAgentManager.AgentType.Feedly,
-                 _ strage: StrageManager.StrageType = StrageManager.StrageType.UserDefaults,
+                 _ storage: StorageManager.StorageType = StorageManager.StorageType.UserDefaults,
                  _ clientId:String? = nil,
                  _ clientSecret:String? = nil) {
         func getConfigurations(
@@ -30,21 +30,21 @@ public class FeedAgentManager {
             clientId: clientId, clientSecret: clientSecret)!
         switch type {
         case .Feedly:
-            agent = Feedly(type: strage, configurations: configurations)
+            agent = Feedly(type: storage, configurations: configurations)
         default:
-            agent = Feedly(type: strage, configurations: configurations)
+            agent = Feedly(type: storage, configurations: configurations)
         }
      }
     
     public static func shared(_ type: FeedAgentManager.AgentType = FeedAgentManager.AgentType.Feedly,
-                              _ strage: StrageManager.StrageType = StrageManager.StrageType.UserDefaults,
+                              _ storage: StorageManager.StorageType = StorageManager.StorageType.UserDefaults,
                               _ clientId: String? = nil,
                               _ clientSecret: String? = nil) -> FeedAgentManager {
         if let feedManager: FeedAgentManager = FeedAgentManager.feedManager, feedManager.agent.agentType == type {
            return feedManager
         }
         FeedAgentManager.feedManager = FeedAgentManager(
-            type, strage, clientId, clientSecret)
+            type, storage, clientId, clientSecret)
         return FeedAgentManager.feedManager!
     }
 }
@@ -282,29 +282,29 @@ public protocol Agent {
 }
 
 public class FeedAgent {
-    let strage: Strage
+    let storage: Storage
     let cfg: FeedAgentManager.Dict
-    let strageKey: String
-    var props: StrageManager.Properties
+    let storageKey: String
+    var props: StorageManager.Properties
     
-    init(type: StrageManager.StrageType, configurations: FeedAgentManager.Dict) {
-        self.strage = StrageManager.shared(type).strage
+    init(type: StorageManager.StorageType, configurations: FeedAgentManager.Dict) {
+        self.storage = StorageManager.shared(type).storage
         self.cfg = configurations
-        self.strageKey = cfg["strage_key"] as! String
-        self.props = self.strage.loadProperties(key: self.strageKey) ?? [:]
+        self.storageKey = cfg["storage_key"] as! String
+        self.props = self.storage.loadProperties(key: self.storageKey) ?? [:]
     }
     
-    func updateProperties(properties: StrageManager.Properties, needCreateAt: Bool = false) {
+    func updateProperties(properties: StorageManager.Properties, needCreateAt: Bool = false) {
         props = props.merging(properties){$1}
         if needCreateAt {
             props["created_at"] = Date.timeIntervalSinceReferenceDate
         }
-        self.strage.storeProperties(key: self.strageKey, dict: props)
+        self.storage.storeProperties(key: self.storageKey, dict: props)
     }
         
     func clearProperties() {
         props.removeAll()
-        self.strage.storeProperties(key: self.strageKey, dict: props)
+        self.storage.storeProperties(key: self.storageKey, dict: props)
     }
     
     func clear(result: FeedAgentManager.FeedAgentResult?) {
@@ -322,7 +322,7 @@ public class FeedAgent {
         if let resut = result {
             switch resut {
             case .success(let dict):
-                updateProperties(properties: dict as! StrageManager.Properties, needCreateAt: true)
+                updateProperties(properties: dict as! StorageManager.Properties, needCreateAt: true)
             case .failure(_):
                 break
             }
