@@ -271,7 +271,7 @@ public protocol Agent {
     func requestUnTagging(entyIds: FeedAgentManager.Array?, tagIds: FeedAgentManager.Array, completion: @escaping FeedAgentManager.Completion)
     func requestRenamingTag(tagId: String, label: String, completion: @escaping FeedAgentManager.Completion)
     func requestBoards(completion: @escaping FeedAgentManager.Completion)
-    func requestSearching(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion)
+    func requestSearching(params: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion)
     func requestAllSavedArticles(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion)
     func requestUpdatingCategory(category: FeedAgentManager.Dict, categoryId: String, completion: @escaping FeedAgentManager.Completion)
     func requestAppendingFeedsToCategory(feeds: FeedAgentManager.DictInArray, categoryId: String, completion: @escaping FeedAgentManager.Completion)
@@ -755,8 +755,14 @@ public class Feedly: FeedAgent, Agent {
         }
     }
     
-    public func requestSearching(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion) {
-        
+    public func requestSearching(params: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion) {
+        let search_url = "https://\(domain)/v3/search/feeds"
+        let search_with_params_url = buildURLwithParams(url: search_url, params: params)
+        FeedAgentManager.get(
+            url: URL(
+                string: search_with_params_url)!, concurrentType: .NonBlocking, accessToken: self.bearerToken) {result in
+            completion(result)
+        }
     }
     
     public func requestAllSavedArticles(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion) {
