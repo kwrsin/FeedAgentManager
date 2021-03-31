@@ -203,10 +203,8 @@ extension FeedAgentManager {
         switch concurrentType {
         case .NonBlocking:
             URLSession.shared.dataTask(with: request) { data, response, error in
-                DispatchQueue.main.async {
-                    let data = data ?? Data()
-                    FeedAgentManager.process(data: data, responseHeader: response, error: error, completion: completion)
-                }
+                let data = data ?? Data()
+                FeedAgentManager.process(data: data, responseHeader: response, error: error, completion: completion)
             }.resume()
         case .Blocking:
             let semaphore = DispatchSemaphore(value: 0)
@@ -215,7 +213,7 @@ extension FeedAgentManager {
                 FeedAgentManager.process(data: data, responseHeader: response, error: error, completion: completion)
                 semaphore.signal()
             }.resume()
-            if semaphore.wait(timeout: .now() + 20) == .timedOut {
+            if semaphore.wait(timeout: .now() + 5) == .timedOut {
                 completion(.failure(.connectionError("timeout")))
             }
         }
