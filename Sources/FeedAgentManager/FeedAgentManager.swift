@@ -215,7 +215,9 @@ extension FeedAgentManager {
                 FeedAgentManager.process(data: data, responseHeader: response, error: error, completion: completion)
                 semaphore.signal()
             }.resume()
-            _ = semaphore.wait(wallTimeout: .distantFuture)//TODO: need timers
+            if semaphore.wait(timeout: .now() + 20) == .timedOut {
+                completion(.failure(.connectionError("timeout")))
+            }
         }
     }
     
@@ -264,7 +266,7 @@ public protocol Agent {
     func requestNewAccessToken() -> FeedAgentManager.FeedAgentResult
     func requestProfile() -> FeedAgentManager.FeedAgentResult
     func logout(completion: @escaping FeedAgentManager.Completion)
-    func requestAllArticlesByPage(unreadOnly:Bool, completion: @escaping FeedAgentManager.Completion)
+    func requestAllArticlesByPage(unreadOnly:Bool, concurrentType: FeedAgentManager.ConcurrentType, completion: @escaping FeedAgentManager.Completion)
     func requestMarking(entries: FeedAgentManager.Dict, type: FeedAgentManager.MarkingType, action: FeedAgentManager.MarkingAction, completion: @escaping FeedAgentManager.Completion)
     func requestUpdatingBoard(board: FeedAgentManager.Dict, tagId: String, completion: @escaping FeedAgentManager.Completion)
     func requestTagging(entries: FeedAgentManager.Dict, tagIds: FeedAgentManager.Array, completion: @escaping FeedAgentManager.Completion)
@@ -537,7 +539,7 @@ public class Feedly: FeedAgent, Agent {
         }
     }
 
-    public func requestAllArticlesByPage(unreadOnly: Bool = false, completion: @escaping FeedAgentManager.Completion) {
+    public func requestAllArticlesByPage(unreadOnly: Bool = false, concurrentType: FeedAgentManager.ConcurrentType = .NonBlocking, completion: @escaping FeedAgentManager.Completion) {
         let streamId = "user/\(userId!)/category/global.all"
         var streams_url: String =
             "https://\(domain)/v3/streams/contents"
@@ -559,7 +561,7 @@ public class Feedly: FeedAgent, Agent {
         streams_url = buildURLwithParams(url: streams_url, params: params)
         FeedAgentManager.get(
             url: URL(
-                string: streams_url)!, concurrentType: .NonBlocking, accessToken: self.bearerToken) {result in
+                string: streams_url)!, concurrentType: concurrentType, accessToken: self.bearerToken) {result in
             switch result {
             case .success(let dict as FeedAgentManager.Dict):
                 if let continuation = dict["continuation"] as? String {
