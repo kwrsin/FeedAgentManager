@@ -53,6 +53,11 @@ public class FeedAgentManager {
 
 //MARK: constants
 extension FeedAgentManager {
+    public enum ArticleType {
+        case all
+        case id(String)
+    }
+
     public enum AgentType: String {
         case Feedly
         case Other
@@ -260,11 +265,12 @@ public protocol Agent {
     var userId:String? {get}
     var attachmentName:String? {get}
     
+    func getArticleId(_ articleType: FeedAgentManager.ArticleType) -> String
     func requestAccessToken() -> FeedAgentManager.FeedAgentResult
     func requestNewAccessToken() -> FeedAgentManager.FeedAgentResult
     func requestProfile() -> FeedAgentManager.FeedAgentResult
     func logout(completion: @escaping FeedAgentManager.Completion)
-    func requestAllArticlesByPage(unreadOnly:Bool, concurrentType: FeedAgentManager.ConcurrentType, completion: @escaping FeedAgentManager.Completion)
+    func requestAllArticlesByPage(unreadOnly:Bool, concurrentType: FeedAgentManager.ConcurrentType,  articleType: FeedAgentManager.ArticleType, completion: @escaping FeedAgentManager.Completion)
     func requestMarking(entries: FeedAgentManager.Dict, type: FeedAgentManager.MarkingType, action: FeedAgentManager.MarkingAction, completion: @escaping FeedAgentManager.Completion)
     func requestUpdatingBoard(board: FeedAgentManager.Dict, tagId: String, completion: @escaping FeedAgentManager.Completion)
     func requestTagging(entries: FeedAgentManager.Dict, tagIds: FeedAgentManager.Array, completion: @escaping FeedAgentManager.Completion)
@@ -458,6 +464,15 @@ public class Feedly: FeedAgent, Agent {
         return Date.timeIntervalSinceReferenceDate > createdAt + expiresIn
     }
 
+    public func getArticleId(_ articleType: FeedAgentManager.ArticleType = .all) -> String {
+        switch articleType {
+        case .id(let identifier):
+            return identifier
+        default:
+            return "user/\(userId!)/category/global.all"
+        }
+    }
+    
     public func isRedirected() -> Bool {
         if let params = self.redirectParams {
             return params["error"] == nil
@@ -537,8 +552,8 @@ public class Feedly: FeedAgent, Agent {
         }
     }
 
-    public func requestAllArticlesByPage(unreadOnly: Bool = false, concurrentType: FeedAgentManager.ConcurrentType = .NonBlocking, completion: @escaping FeedAgentManager.Completion) {
-        let streamId = "user/\(userId!)/category/global.all"
+    public func requestAllArticlesByPage(unreadOnly: Bool = false, concurrentType: FeedAgentManager.ConcurrentType = .NonBlocking, articleType: FeedAgentManager.ArticleType = .all , completion: @escaping FeedAgentManager.Completion) {
+        let streamId = getArticleId(articleType)
         var streams_url: String =
             "https://\(domain)/v3/streams/contents"
         var params = [
