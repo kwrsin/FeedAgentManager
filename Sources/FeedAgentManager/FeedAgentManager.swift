@@ -566,8 +566,10 @@ public class Feedly: FeedAgent, Agent {
             params["continuation"] = continuation
         } else {
             //TODO: need preventNewerThan?
-            if let newerThan = props["entries_newerThan"] as? Int64, newerThan > 0 {
-                params["newerThan"] = "\(newerThan + 1)"
+            if case .all = articleType {
+                if let newerThan = props["entries_newerThan"] as? Int64, newerThan > 0 {
+                    params["newerThan"] = "\(newerThan + 1)"
+                }
             }
         }
         //TODO: rank?
@@ -581,7 +583,9 @@ public class Feedly: FeedAgent, Agent {
                     self.continuation = continuation
                 } else {
                     if let newerThan = dict["updated"] as? Int64 {
-                        self.updateProperties(properties: ["entries_newerThan": newerThan])
+                        if case .all = articleType {
+                            self.updateProperties(properties: ["entries_newerThan": newerThan])
+                        }
                     }
                     self.continuation?.removeAll()
                 }
