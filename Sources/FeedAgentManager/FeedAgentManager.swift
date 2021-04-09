@@ -279,6 +279,7 @@ public protocol Agent {
     func requestBoards(completion: @escaping FeedAgentManager.Completion)
     func requestSearching(params: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion)
     func requestAllSavedArticles(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion)
+    func initializeAgentProperties()
     func requestUpdatingCategory(category: FeedAgentManager.Dict, categoryId: String, completion: @escaping FeedAgentManager.Completion)
     func requestAppendingFeedsToCategory(feeds: FeedAgentManager.DictInArray, categoryId: String, completion: @escaping FeedAgentManager.Completion)
     func requestRemovingFeedsToCategory(feeds: FeedAgentManager.DictInArray, categoryId: String, keepFeeds: Bool, completion: @escaping FeedAgentManager.Completion)
@@ -463,6 +464,10 @@ public class Feedly: FeedAgent, Agent {
         }
         return Date.timeIntervalSinceReferenceDate > createdAt + expiresIn
     }
+    
+    public func initializeAgentProperties() {
+        continuation?.removeAll()
+    }
 
     public func getArticleId(_ articleType: FeedAgentManager.ArticleType = .all) -> String {
         switch articleType {
@@ -587,7 +592,7 @@ public class Feedly: FeedAgent, Agent {
                             self.updateProperties(properties: ["entries_newerThan": newerThan])
                         }
                     }
-                    self.continuation?.removeAll()
+                    self.initializeAgentProperties()
                 }
             default:
                 break
