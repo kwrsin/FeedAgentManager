@@ -274,7 +274,7 @@ public protocol Agent {
     func requestMarking(entries: FeedAgentManager.Dict, type: FeedAgentManager.MarkingType, action: FeedAgentManager.MarkingAction, completion: @escaping FeedAgentManager.Completion)
     func requestUpdatingBoard(board: FeedAgentManager.Dict, tagId: String, completion: @escaping FeedAgentManager.Completion)
     func requestTagging(entries: FeedAgentManager.Dict, tagIds: FeedAgentManager.Array, completion: @escaping FeedAgentManager.Completion)
-    func requestUnTagging(entyIds: FeedAgentManager.Array?, tagIds: FeedAgentManager.Array, completion: @escaping FeedAgentManager.Completion)
+    func requestUnTagging(entryIds: FeedAgentManager.Array?, tagIds: FeedAgentManager.Array, completion: @escaping FeedAgentManager.Completion)
     func requestRenamingTag(tagId: String, label: String, completion: @escaping FeedAgentManager.Completion)
     func requestBoards(completion: @escaping FeedAgentManager.Completion)
     func requestSearching(params: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion)
@@ -649,9 +649,9 @@ public class Feedly: FeedAgent, Agent {
         }
     }
     
-    public func requestUnTagging(entyIds: FeedAgentManager.Array?, tagIds: FeedAgentManager.Array, completion: @escaping FeedAgentManager.Completion) {
+    public func requestUnTagging(entryIds: FeedAgentManager.Array?, tagIds: FeedAgentManager.Array, completion: @escaping FeedAgentManager.Completion) {
         let entyIds =
-            entyIds?.joined(separator: ",")
+            entryIds?.joined(separator: ",")
                 .addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)! ?? ""
         let tagIds =
             tagIds.joined(separator: ",")
