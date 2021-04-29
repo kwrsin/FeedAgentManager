@@ -205,15 +205,20 @@ extension FeedAgentManager {
         }
         request.httpMethod = method.rawValue
         request.httpBody = params
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 30.0
+        config.timeoutIntervalForResource = 60.0
+        
+        let urlsession = URLSession(configuration: config)
         switch concurrentType {
         case .NonBlocking:
-            URLSession.shared.dataTask(with: request) { data, response, error in
+            urlsession.dataTask(with: request) { data, response, error in
                 let data = data ?? Data()
                 FeedAgentManager.process(data: data, responseHeader: response, error: error, completion: completion)
             }.resume()
         case .Blocking:
             let semaphore = DispatchSemaphore(value: 0)
-            URLSession.shared.dataTask(with: request) { data, response, error in
+            urlsession.dataTask(with: request) { data, response, error in
                 let data = data ?? Data()
                 FeedAgentManager.process(data: data, responseHeader: response, error: error, completion: completion)
                 semaphore.signal()
