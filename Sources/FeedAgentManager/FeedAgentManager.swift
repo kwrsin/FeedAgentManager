@@ -655,12 +655,13 @@ public class Feedly: FeedAgent, Agent {
     }
     
     public func requestUnTagging(entryIds: FeedAgentManager.Array?, tagIds: FeedAgentManager.Array, completion: @escaping FeedAgentManager.Completion) {
+        // https://stackoverflow.com/questions/41561853/couldnt-encode-plus-character-in-url-swift
         let entyIds =
             entryIds?.joined(separator: ",")
-                .addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)! ?? ""
+                .addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)!.replacingOccurrences(of: "&", with: "%26").replacingOccurrences(of: "+", with: "%2B") ?? ""
         let tagIds =
             tagIds.joined(separator: ",")
-                .addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)!
+                .addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)!.replacingOccurrences(of: "&", with: "%26").replacingOccurrences(of: "+", with: "%2B")
         let tags_url: String =
             "\(self.tags_url)/\(tagIds)/\(entyIds)"
                 
@@ -728,7 +729,7 @@ public class Feedly: FeedAgent, Agent {
     
     public func requestRemovingFeedsToCategory(feeds: FeedAgentManager.DictInArray, categoryId: String, keepFeeds: Bool = false, completion: @escaping FeedAgentManager.Completion) {
         let categoryId = categoryId
-                .addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)!
+                .addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)!.replacingOccurrences(of: "&", with: "%26").replacingOccurrences(of: "+", with: "%2B")
         var categories_url: String =
             "\(self.categories_url)/\(categoryId)/feeds/.mdelete"
         let params = ["keepOrphanFeeds": keepFeeds]
@@ -746,7 +747,7 @@ public class Feedly: FeedAgent, Agent {
     public func requestRemovingCategory(categoryId: String, completion: @escaping FeedAgentManager.Completion) {
         var category_url = "https://\(domain)/v3/categories"
         let categoryId = categoryId
-                .addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)!
+                .addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)!.replacingOccurrences(of: "&", with: "%26").replacingOccurrences(of: "+", with: "%2B")
         category_url = "\(category_url)/\(categoryId)"
 
         FeedAgentManager.delete(
