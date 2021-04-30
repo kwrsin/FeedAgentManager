@@ -53,6 +53,11 @@ public class FeedAgentManager {
 
 //MARK: constants
 extension FeedAgentManager {
+    public enum ArticleType {
+        case all
+        case id(String)
+    }
+
     public enum AgentType: String {
         case Feedly
         case Other
@@ -200,22 +205,27 @@ extension FeedAgentManager {
         }
         request.httpMethod = method.rawValue
         request.httpBody = params
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 30.0
+        config.timeoutIntervalForResource = 60.0
+        
+        let urlsession = URLSession(configuration: config)
         switch concurrentType {
         case .NonBlocking:
-            URLSession.shared.dataTask(with: request) { data, response, error in
-                DispatchQueue.main.async {
-                    let data = data ?? Data()
-                    FeedAgentManager.process(data: data, responseHeader: response, error: error, completion: completion)
-                }
+            urlsession.dataTask(with: request) { data, response, error in
+                let data = data ?? Data()
+                FeedAgentManager.process(data: data, responseHeader: response, error: error, completion: completion)
             }.resume()
         case .Blocking:
             let semaphore = DispatchSemaphore(value: 0)
-            URLSession.shared.dataTask(with: request) { data, response, error in
+            urlsession.dataTask(with: request) { data, response, error in
                 let data = data ?? Data()
                 FeedAgentManager.process(data: data, responseHeader: response, error: error, completion: completion)
                 semaphore.signal()
             }.resume()
-            _ = semaphore.wait(wallTimeout: .distantFuture)//TODO: need timers
+            if semaphore.wait(timeout: .now() + 5) == .timedOut {
+                completion(.failure(.connectionError("timeout")))
+            }
         }
     }
     
@@ -260,19 +270,21 @@ public protocol Agent {
     var userId:String? {get}
     var attachmentName:String? {get}
     
+    func getArticleId(_ articleType: FeedAgentManager.ArticleType) -> String
     func requestAccessToken() -> FeedAgentManager.FeedAgentResult
     func requestNewAccessToken() -> FeedAgentManager.FeedAgentResult
     func requestProfile() -> FeedAgentManager.FeedAgentResult
     func logout(completion: @escaping FeedAgentManager.Completion)
-    func requestAllArticlesByPage(unreadOnly:Bool, completion: @escaping FeedAgentManager.Completion)
+    func requestAllArticlesByPage(unreadOnly:Bool, concurrentType: FeedAgentManager.ConcurrentType,  articleType: FeedAgentManager.ArticleType, completion: @escaping FeedAgentManager.Completion)
     func requestMarking(entries: FeedAgentManager.Dict, type: FeedAgentManager.MarkingType, action: FeedAgentManager.MarkingAction, completion: @escaping FeedAgentManager.Completion)
     func requestUpdatingBoard(board: FeedAgentManager.Dict, tagId: String, completion: @escaping FeedAgentManager.Completion)
     func requestTagging(entries: FeedAgentManager.Dict, tagIds: FeedAgentManager.Array, completion: @escaping FeedAgentManager.Completion)
-    func requestUnTagging(entyIds: FeedAgentManager.Array?, tagIds: FeedAgentManager.Array, completion: @escaping FeedAgentManager.Completion)
+    func requestUnTagging(entryIds: FeedAgentManager.Array?, tagIds: FeedAgentManager.Array, completion: @escaping FeedAgentManager.Completion)
     func requestRenamingTag(tagId: String, label: String, completion: @escaping FeedAgentManager.Completion)
     func requestBoards(completion: @escaping FeedAgentManager.Completion)
-    func requestSearching(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion)
+    func requestSearching(params: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion)
     func requestAllSavedArticles(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion)
+    func initializeAgentProperties()
     func requestUpdatingCategory(category: FeedAgentManager.Dict, categoryId: String, completion: @escaping FeedAgentManager.Completion)
     func requestAppendingFeedsToCategory(feeds: FeedAgentManager.DictInArray, categoryId: String, completion: @escaping FeedAgentManager.Completion)
     func requestRemovingFeedsToCategory(feeds: FeedAgentManager.DictInArray, categoryId: String, keepFeeds: Bool, completion: @escaping FeedAgentManager.Completion)
@@ -457,7 +469,20 @@ public class Feedly: FeedAgent, Agent {
         }
         return Date.timeIntervalSinceReferenceDate > createdAt + expiresIn
     }
+    
+    public func initializeAgentProperties() {
+        continuation?.removeAll()
+    }
 
+    public func getArticleId(_ articleType: FeedAgentManager.ArticleType = .all) -> String {
+        switch articleType {
+        case .id(let identifier):
+            return identifier
+        default:
+            return "user/\(userId!)/category/global.all"
+        }
+    }
+    
     public func isRedirected() -> Bool {
         if let params = self.redirectParams {
             return params["error"] == nil
@@ -537,8 +562,8 @@ public class Feedly: FeedAgent, Agent {
         }
     }
 
-    public func requestAllArticlesByPage(unreadOnly: Bool = false, completion: @escaping FeedAgentManager.Completion) {
-        let streamId = "user/\(userId!)/category/global.all"
+    public func requestAllArticlesByPage(unreadOnly: Bool = false, concurrentType: FeedAgentManager.ConcurrentType = .NonBlocking, articleType: FeedAgentManager.ArticleType = .all , completion: @escaping FeedAgentManager.Completion) {
+        let streamId = getArticleId(articleType)
         var streams_url: String =
             "https://\(domain)/v3/streams/contents"
         var params = [
@@ -551,24 +576,28 @@ public class Feedly: FeedAgent, Agent {
             params["continuation"] = continuation
         } else {
             //TODO: need preventNewerThan?
-            if let newerThan = props["entries_newerThan"] as? Int64, newerThan > 0 {
-                params["newerThan"] = "\(newerThan + 1)"
+            if case .all = articleType {
+                if let newerThan = props["entries_newerThan"] as? Int64, newerThan > 0 {
+                    params["newerThan"] = "\(newerThan + 1)"
+                }
             }
         }
         //TODO: rank?
         streams_url = buildURLwithParams(url: streams_url, params: params)
         FeedAgentManager.get(
             url: URL(
-                string: streams_url)!, concurrentType: .NonBlocking, accessToken: self.bearerToken) {result in
+                string: streams_url)!, concurrentType: concurrentType, accessToken: self.bearerToken) {result in
             switch result {
             case .success(let dict as FeedAgentManager.Dict):
                 if let continuation = dict["continuation"] as? String {
                     self.continuation = continuation
                 } else {
                     if let newerThan = dict["updated"] as? Int64 {
-                        self.updateProperties(properties: ["entries_newerThan": newerThan])
+                        if case .all = articleType {
+                            self.updateProperties(properties: ["entries_newerThan": newerThan])
+                        }
                     }
-                    self.continuation?.removeAll()
+                    self.initializeAgentProperties()
                 }
             default:
                 break
@@ -625,13 +654,14 @@ public class Feedly: FeedAgent, Agent {
         }
     }
     
-    public func requestUnTagging(entyIds: FeedAgentManager.Array?, tagIds: FeedAgentManager.Array, completion: @escaping FeedAgentManager.Completion) {
+    public func requestUnTagging(entryIds: FeedAgentManager.Array?, tagIds: FeedAgentManager.Array, completion: @escaping FeedAgentManager.Completion) {
+        // https://stackoverflow.com/questions/41561853/couldnt-encode-plus-character-in-url-swift
         let entyIds =
-            entyIds?.joined(separator: ",")
-                .addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)! ?? ""
+            entryIds?.joined(separator: ",")
+                .addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)!.replacingOccurrences(of: "&", with: "%26").replacingOccurrences(of: "+", with: "%2B") ?? ""
         let tagIds =
             tagIds.joined(separator: ",")
-                .addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)!
+                .addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)!.replacingOccurrences(of: "&", with: "%26").replacingOccurrences(of: "+", with: "%2B")
         let tags_url: String =
             "\(self.tags_url)/\(tagIds)/\(entyIds)"
                 
@@ -699,7 +729,7 @@ public class Feedly: FeedAgent, Agent {
     
     public func requestRemovingFeedsToCategory(feeds: FeedAgentManager.DictInArray, categoryId: String, keepFeeds: Bool = false, completion: @escaping FeedAgentManager.Completion) {
         let categoryId = categoryId
-                .addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)!
+                .addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)!.replacingOccurrences(of: "&", with: "%26").replacingOccurrences(of: "+", with: "%2B")
         var categories_url: String =
             "\(self.categories_url)/\(categoryId)/feeds/.mdelete"
         let params = ["keepOrphanFeeds": keepFeeds]
@@ -717,7 +747,7 @@ public class Feedly: FeedAgent, Agent {
     public func requestRemovingCategory(categoryId: String, completion: @escaping FeedAgentManager.Completion) {
         var category_url = "https://\(domain)/v3/categories"
         let categoryId = categoryId
-                .addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)!
+                .addingPercentEncoding(withAllowedCharacters: .urlHostAllowed)!.replacingOccurrences(of: "&", with: "%26").replacingOccurrences(of: "+", with: "%2B")
         category_url = "\(category_url)/\(categoryId)"
 
         FeedAgentManager.delete(
@@ -755,8 +785,14 @@ public class Feedly: FeedAgent, Agent {
         }
     }
     
-    public func requestSearching(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion) {
-        
+    public func requestSearching(params: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion) {
+        let search_url = "https://\(domain)/v3/search/feeds"
+        let search_with_params_url = buildURLwithParams(url: search_url, params: params)
+        FeedAgentManager.get(
+            url: URL(
+                string: search_with_params_url)!, concurrentType: .NonBlocking, accessToken: self.bearerToken) {result in
+            completion(result)
+        }
     }
     
     public func requestAllSavedArticles(entries: FeedAgentManager.Dict, completion: @escaping FeedAgentManager.Completion) {
