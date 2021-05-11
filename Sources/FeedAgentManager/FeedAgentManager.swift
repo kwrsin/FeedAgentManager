@@ -56,6 +56,7 @@ extension FeedAgentManager {
     public enum ArticleType {
         case all
         case id(String)
+        case ignoreNewerThan
     }
 
     public enum AgentType: String {
@@ -562,7 +563,7 @@ public class Feedly: FeedAgent, Agent {
         }
     }
 
-    public func requestAllArticlesByPage(unreadOnly: Bool = false, concurrentType: FeedAgentManager.ConcurrentType = .NonBlocking, articleType: FeedAgentManager.ArticleType = .all , completion: @escaping FeedAgentManager.Completion) {
+    public func requestAllArticlesByPage(unreadOnly: Bool = false, concurrentType: FeedAgentManager.ConcurrentType = .NonBlocking, articleType: FeedAgentManager.ArticleType = .all, completion: @escaping FeedAgentManager.Completion) {
         let streamId = getArticleId(articleType)
         var streams_url: String =
             "https://\(domain)/v3/streams/contents"
@@ -575,7 +576,6 @@ public class Feedly: FeedAgent, Agent {
         if let continuation = continuation, continuation.isEmpty == false {
             params["continuation"] = continuation
         } else {
-            //TODO: need preventNewerThan?
             if case .all = articleType {
                 if let newerThan = props["entries_newerThan"] as? Int64, newerThan > 0 {
                     params["newerThan"] = "\(newerThan + 1)"
