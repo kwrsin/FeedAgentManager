@@ -146,13 +146,17 @@ extension FeedAgentManager {
     }
     
     public static func process(
-        data: Data, responseHeader: URLResponse?, error: Error?, completion: @escaping Completion) {
+        data: Data, responseHeader: URLResponse?, error: Error?, rawData: Bool = false, completion: @escaping Completion) {
         do {
             if let responseHeader = responseHeader, isValidResponse(responseHeader: responseHeader) {
                 if data.isEmpty {
                     completion(.success([:]))
                     return
                 }
+            }
+            if rawData {
+                completion(.success(data))
+                return
             }
 
             let values = try JSONSerialization.jsonObject(with: data, options: .allowFragments)
@@ -185,7 +189,7 @@ extension FeedAgentManager {
     }
     
     public static func request(
-        url: URL, params: Data? = nil, method: HttpMethod = .POST, concurrentType: ConcurrentType = .NonBlocking ,accessToken: String? = nil, contentType: FeedAgentManager.ContentType = .none, boundary: String? = nil, completion: @escaping Completion) {
+        url: URL, params: Data? = nil, method: HttpMethod = .POST, concurrentType: ConcurrentType = .NonBlocking ,accessToken: String? = nil, contentType: FeedAgentManager.ContentType = .none, boundary: String? = nil, rawData: Bool = false, completion: @escaping Completion) {
         var request = URLRequest(url: url)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         
@@ -215,13 +219,13 @@ extension FeedAgentManager {
         case .NonBlocking:
             urlsession.dataTask(with: request) { data, response, error in
                 let data = data ?? Data()
-                FeedAgentManager.process(data: data, responseHeader: response, error: error, completion: completion)
+                FeedAgentManager.process(data: data, responseHeader: response, error: error, rawData: rawData, completion: completion)
             }.resume()
         case .Blocking:
             let semaphore = DispatchSemaphore(value: 0)
             urlsession.dataTask(with: request) { data, response, error in
                 let data = data ?? Data()
-                FeedAgentManager.process(data: data, responseHeader: response, error: error, completion: completion)
+                FeedAgentManager.process(data: data, responseHeader: response, error: error, rawData: rawData, completion: completion)
                 semaphore.signal()
             }.resume()
             if semaphore.wait(timeout: .now() + 5) == .timedOut {
@@ -249,9 +253,9 @@ extension FeedAgentManager {
     }
 
     public static func get(
-        url: URL, params: Data? = nil, concurrentType: ConcurrentType = .NonBlocking, accessToken: String? = nil, contentType: ContentType = .none, completion: @escaping Completion) {
+        url: URL, params: Data? = nil, concurrentType: ConcurrentType = .NonBlocking, accessToken: String? = nil, contentType: ContentType = .none, rawData: Bool = false, completion: @escaping Completion) {
         FeedAgentManager.request(
-            url: url, params: params, method: .GET, concurrentType: concurrentType, accessToken: accessToken, contentType:contentType, completion: completion)
+            url: url, params: params, method: .GET, concurrentType: concurrentType, accessToken: accessToken, contentType:contentType, rawData: rawData, completion: completion)
     }
 
 }
