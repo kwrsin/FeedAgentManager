@@ -4,7 +4,7 @@ public class FeedAgentManager {
     private static var feedManager: FeedAgentManager?
     public let agent: Agent
     private init(_ type: FeedAgentManager.AgentType = FeedAgentManager.AgentType.Feedly,
-                 _ storage: StorageManager.StorageType = StorageManager.StorageType.UserDefaults,
+                 _ storage: StorageManager.StorageType = StorageManager.StorageType.KeyChains,
                  _ clientId:String? = nil,
                  _ clientSecret:String? = nil) {
         func getConfigurations(
@@ -305,9 +305,10 @@ public class FeedAgent {
     var props: StorageManager.Properties
     
     init(type: StorageManager.StorageType, configurations: FeedAgentManager.Dict) {
-        self.storage = StorageManager.shared(type).storage
         self.cfg = configurations
-        self.storageKey = cfg["storage_key"] as! String
+        let cfg_storageKey = cfg["storage_key"] as? String
+        self.storageKey = Bundle.main.bundleIdentifier ?? cfg_storageKey ?? StorageManager.defaultServiceName
+        self.storage = StorageManager.shared(type, self.storageKey).storage
         self.props = self.storage.loadProperties(key: self.storageKey) ?? [:]
     }
     
@@ -321,7 +322,7 @@ public class FeedAgent {
         
     func clearProperties() {
         props.removeAll()
-        self.storage.storeProperties(key: self.storageKey, dict: props)
+        self.storage.clearStorage(key: self.storageKey)
     }
     
     func clear(result: FeedAgentManager.FeedAgentResult?) {
