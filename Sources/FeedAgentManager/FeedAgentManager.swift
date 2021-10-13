@@ -37,7 +37,7 @@ public class FeedAgentManager {
      }
     
     public static func shared(_ type: FeedAgentManager.AgentType = FeedAgentManager.AgentType.Feedly,
-                              _ storage: StorageManager.StorageType = StorageManager.StorageType.UserDefaults,
+                              _ storage: StorageManager.StorageType = StorageManager.StorageType.KeyChains,
                               _ clientId: String? = nil,
                               _ clientSecret: String? = nil) -> FeedAgentManager {
         if let feedManager: FeedAgentManager = FeedAgentManager.feedManager, feedManager.agent.agentType == type {
