@@ -4,7 +4,7 @@ public class FeedAgentManager {
     private static var feedManager: FeedAgentManager?
     public let agent: Agent
     private init(_ type: FeedAgentManager.AgentType = FeedAgentManager.AgentType.Feedly,
-                 _ storage: StorageManager.StorageType = StorageManager.StorageType.UserDefaults,
+                 _ storage: StorageManager.StorageType = StorageManager.StorageType.KeyChains,
                  _ clientId:String? = nil,
                  _ clientSecret:String? = nil) {
         func getConfigurations(
@@ -37,7 +37,7 @@ public class FeedAgentManager {
      }
     
     public static func shared(_ type: FeedAgentManager.AgentType = FeedAgentManager.AgentType.Feedly,
-                              _ storage: StorageManager.StorageType = StorageManager.StorageType.UserDefaults,
+                              _ storage: StorageManager.StorageType = StorageManager.StorageType.KeyChains,
                               _ clientId: String? = nil,
                               _ clientSecret: String? = nil) -> FeedAgentManager {
         if let feedManager: FeedAgentManager = FeedAgentManager.feedManager, feedManager.agent.agentType == type {
@@ -56,6 +56,7 @@ extension FeedAgentManager {
     public enum ArticleType {
         case all
         case id(String)
+        case ignoreNewerThan
     }
 
     public enum AgentType: String {
@@ -145,13 +146,17 @@ extension FeedAgentManager {
     }
     
     public static func process(
-        data: Data, responseHeader: URLResponse?, error: Error?, completion: @escaping Completion) {
+        data: Data, responseHeader: URLResponse?, error: Error?, rawData: Bool = false, completion: @escaping Completion) {
         do {
             if let responseHeader = responseHeader, isValidResponse(responseHeader: responseHeader) {
                 if data.isEmpty {
                     completion(.success([:]))
                     return
                 }
+            }
+            if rawData {
+                completion(.success(data))
+                return
             }
 
             let values = try JSONSerialization.jsonObject(with: data, options: .allowFragments)
@@ -184,7 +189,7 @@ extension FeedAgentManager {
     }
     
     public static func request(
-        url: URL, params: Data? = nil, method: HttpMethod = .POST, concurrentType: ConcurrentType = .NonBlocking ,accessToken: String? = nil, contentType: FeedAgentManager.ContentType = .none, boundary: String? = nil, completion: @escaping Completion) {
+        url: URL, params: Data? = nil, method: HttpMethod = .POST, concurrentType: ConcurrentType = .NonBlocking ,accessToken: String? = nil, contentType: FeedAgentManager.ContentType = .none, boundary: String? = nil, rawData: Bool = false, completion: @escaping Completion) {
         var request = URLRequest(url: url)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         
@@ -214,13 +219,13 @@ extension FeedAgentManager {
         case .NonBlocking:
             urlsession.dataTask(with: request) { data, response, error in
                 let data = data ?? Data()
-                FeedAgentManager.process(data: data, responseHeader: response, error: error, completion: completion)
+                FeedAgentManager.process(data: data, responseHeader: response, error: error, rawData: rawData, completion: completion)
             }.resume()
         case .Blocking:
             let semaphore = DispatchSemaphore(value: 0)
             urlsession.dataTask(with: request) { data, response, error in
                 let data = data ?? Data()
-                FeedAgentManager.process(data: data, responseHeader: response, error: error, completion: completion)
+                FeedAgentManager.process(data: data, responseHeader: response, error: error, rawData: rawData, completion: completion)
                 semaphore.signal()
             }.resume()
             if semaphore.wait(timeout: .now() + 5) == .timedOut {
@@ -248,9 +253,9 @@ extension FeedAgentManager {
     }
 
     public static func get(
-        url: URL, params: Data? = nil, concurrentType: ConcurrentType = .NonBlocking, accessToken: String? = nil, contentType: ContentType = .none, completion: @escaping Completion) {
+        url: URL, params: Data? = nil, concurrentType: ConcurrentType = .NonBlocking, accessToken: String? = nil, contentType: ContentType = .none, rawData: Bool = false, completion: @escaping Completion) {
         FeedAgentManager.request(
-            url: url, params: params, method: .GET, concurrentType: concurrentType, accessToken: accessToken, contentType:contentType, completion: completion)
+            url: url, params: params, method: .GET, concurrentType: concurrentType, accessToken: accessToken, contentType:contentType, rawData: rawData, completion: completion)
     }
 
 }
@@ -300,9 +305,10 @@ public class FeedAgent {
     var props: StorageManager.Properties
     
     init(type: StorageManager.StorageType, configurations: FeedAgentManager.Dict) {
-        self.storage = StorageManager.shared(type).storage
         self.cfg = configurations
-        self.storageKey = cfg["storage_key"] as! String
+        let cfg_storageKey = cfg["storage_key"] as? String
+        self.storageKey = Bundle.main.bundleIdentifier ?? cfg_storageKey ?? StorageManager.defaultServiceName
+        self.storage = StorageManager.shared(type, self.storageKey).storage
         self.props = self.storage.loadProperties(key: self.storageKey) ?? [:]
     }
     
@@ -316,7 +322,7 @@ public class FeedAgent {
         
     func clearProperties() {
         props.removeAll()
-        self.storage.storeProperties(key: self.storageKey, dict: props)
+        self.storage.clearStorage(key: self.storageKey)
     }
     
     func clear(result: FeedAgentManager.FeedAgentResult?) {
@@ -562,7 +568,7 @@ public class Feedly: FeedAgent, Agent {
         }
     }
 
-    public func requestAllArticlesByPage(unreadOnly: Bool = false, concurrentType: FeedAgentManager.ConcurrentType = .NonBlocking, articleType: FeedAgentManager.ArticleType = .all , completion: @escaping FeedAgentManager.Completion) {
+    public func requestAllArticlesByPage(unreadOnly: Bool = false, concurrentType: FeedAgentManager.ConcurrentType = .NonBlocking, articleType: FeedAgentManager.ArticleType = .all, completion: @escaping FeedAgentManager.Completion) {
         let streamId = getArticleId(articleType)
         var streams_url: String =
             "https://\(domain)/v3/streams/contents"
@@ -575,7 +581,6 @@ public class Feedly: FeedAgent, Agent {
         if let continuation = continuation, continuation.isEmpty == false {
             params["continuation"] = continuation
         } else {
-            //TODO: need preventNewerThan?
             if case .all = articleType {
                 if let newerThan = props["entries_newerThan"] as? Int64, newerThan > 0 {
                     params["newerThan"] = "\(newerThan + 1)"
