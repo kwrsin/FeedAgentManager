@@ -3,14 +3,10 @@ import Foundation
 public class FeedAgentManager {
     private static var feedManager: FeedAgentManager?
     public let agent: Agent
-    private init(_ type: FeedAgentManager.AgentType = FeedAgentManager.AgentType.Feedly,
-                 _ storage: StorageManager.StorageType = StorageManager.StorageType.KeyChains,
-                 _ clientId:String? = nil,
-                 _ clientSecret:String? = nil) {
+    private init(_ agentType: FeedAgentManager.AgentType = FeedAgentManager.AgentType.Feedly,
+                 _ storage: StorageManager.StorageType = StorageManager.StorageType.KeyChains) {
         func getConfigurations(
-            type: FeedAgentManager.AgentType = FeedAgentManager.AgentType.Feedly,
-            clientId: String? = nil,
-            clientSecret: String? = nil) -> Dict? {
+            type: FeedAgentManager.AgentType = FeedAgentManager.AgentType.Feedly) -> Dict? {
             guard let url = Bundle.module.url(forResource: "Configurations", withExtension: "plist") else {return nil}
             
             let data = try! Data(contentsOf: url)
@@ -18,34 +14,83 @@ public class FeedAgentManager {
             switch type {
             default:
                 let agents = plist["Agents"] as! Dict
-                var configurantions = agents[type.rawValue] as! Dict
-                if let clientId = clientId, let clientSecret = clientSecret {
-                    configurantions["client_id"] = configurantions["client_id"] ?? clientId
-                    configurantions["client_secret"] = configurantions["client_secret"] ?? clientSecret
-                }
+                let configurantions = agents[type.rawValue] as! Dict
                 return configurantions
             }
         }
-        let configurations = getConfigurations(
-            clientId: clientId, clientSecret: clientSecret)!
-        switch type {
+        let configurations = getConfigurations(type: agentType)!
+        switch agentType {
         case .Feedly:
-            agent = Feedly(type: storage, configurations: configurations)
+            agent = Feedly(storageType: storage, configurations: configurations)
         default:
-            agent = Feedly(type: storage, configurations: configurations)
+            agent = Feedly(storageType: storage, configurations: configurations)
         }
      }
     
-    public static func shared(_ type: FeedAgentManager.AgentType = FeedAgentManager.AgentType.Feedly,
-                              _ storage: StorageManager.StorageType = StorageManager.StorageType.KeyChains,
-                              _ clientId: String? = nil,
-                              _ clientSecret: String? = nil) -> FeedAgentManager {
-        if let feedManager: FeedAgentManager = FeedAgentManager.feedManager, feedManager.agent.agentType == type {
+    public static func shared(_ agentType: FeedAgentManager.AgentType = FeedAgentManager.AgentType.Feedly,
+                              _ storage: StorageManager.StorageType = StorageManager.StorageType.KeyChains) -> FeedAgentManager {
+        if let feedManager: FeedAgentManager = FeedAgentManager.feedManager, feedManager.agent.agentType == agentType {
            return feedManager
         }
-        FeedAgentManager.feedManager = FeedAgentManager(
-            type, storage, clientId, clientSecret)
+        FeedAgentManager.feedManager = FeedAgentManager(agentType, storage)
         return FeedAgentManager.feedManager!
+    }
+    
+    public static func removeFeedManage() {
+        FeedAgentManager.feedManager = nil
+    }
+    
+    public static func passedAuthentication(type: StorageManager.StorageType = .KeyChains, storageKey: String? = nil) -> Bool {
+        let storageKey = Bundle.main.bundleIdentifier ?? storageKey ?? StorageManager.defaultServiceName
+        let storage = StorageManager.shared(type, storageKey).storage
+        guard Self.hasAppCredentials(), let props = storage.loadProperties(key: storageKey), let agentType = props["agent_type"] as? String, !agentType.isEmpty else {
+            return false
+        }
+        return true
+    }
+    
+    public static func hasAppCredentials(type: StorageManager.StorageType = .KeyChains, storageKey: String? = nil) -> Bool {
+        let storageKey = Bundle.main.bundleIdentifier ?? storageKey ?? StorageManager.defaultServiceName
+        let storage = StorageManager.shared(type, storageKey).storage
+        let props = storage.loadProperties(key: storageKey) ?? [:]
+        guard let client_id = props["client_id"] as? String, !client_id.isEmpty, let client_secret = props["client_secret"] as? String, !client_secret.isEmpty else {
+            return false
+        }
+        return true
+    }
+    
+    public static func setAppCredentials(credentials: (String, String), storageType: StorageManager.StorageType = .KeyChains, storageKey: String? = nil) {
+        var props: StorageManager.Properties = [:]
+        let storageKey = Bundle.main.bundleIdentifier ?? StorageManager.defaultServiceName
+        let storage = StorageManager.shared(storageType, storageKey).storage
+        props["client_id"] = credentials.0
+        props["client_secret"] = credentials.1
+        storage.storeProperties(key: storageKey, dict: props)
+    }
+
+    public static func setAgentType( agent_type: FeedAgentManager.AgentType, storageType: StorageManager.StorageType = .KeyChains, storageKey: String? = nil) {
+        let storageKey = Bundle.main.bundleIdentifier ?? StorageManager.defaultServiceName
+        let storage = StorageManager.shared(storageType, storageKey).storage
+        var props = storage.loadProperties(key: storageKey) ?? [:]
+        props["agent_type"] = agent_type.rawValue
+        storage.storeProperties(key: storageKey, dict: props)
+    }
+
+    public static func getCurrentAgentType(type: StorageManager.StorageType = .KeyChains, storageKey: String? = nil) -> FeedAgentManager.AgentType {
+        let storageKey = Bundle.main.bundleIdentifier ?? storageKey ?? StorageManager.defaultServiceName
+        let storage = StorageManager.shared(type, storageKey).storage
+        let props = storage.loadProperties(key: storageKey) ?? [:]
+        guard let agent_type = props["agent_type"] as? String else {
+            return .None
+        }
+        switch agent_type {
+        case AgentType.Feedly.rawValue:
+            return AgentType.Feedly
+        case AgentType.Other.rawValue:
+            return AgentType.Other
+        default:
+            return AgentType.None
+        }
     }
 }
 
@@ -304,11 +349,11 @@ public class FeedAgent {
     let storageKey: String
     var props: StorageManager.Properties
     
-    init(type: StorageManager.StorageType, configurations: FeedAgentManager.Dict) {
+    init(storageType: StorageManager.StorageType, configurations: FeedAgentManager.Dict) {
         self.cfg = configurations
         let cfg_storageKey = cfg["storage_key"] as? String
         self.storageKey = Bundle.main.bundleIdentifier ?? cfg_storageKey ?? StorageManager.defaultServiceName
-        self.storage = StorageManager.shared(type, self.storageKey).storage
+        self.storage = StorageManager.shared(storageType, self.storageKey).storage
         self.props = self.storage.loadProperties(key: self.storageKey) ?? [:]
     }
     
@@ -330,6 +375,7 @@ public class FeedAgent {
             switch result {
             case .success(_):
                 clearProperties()
+                FeedAgentManager.removeFeedManage()
             case .failure(_):
                 break
             }
@@ -384,8 +430,6 @@ public class FeedAgent {
 public class Feedly: FeedAgent, Agent {
     public var attachmentName: String? = "cover"
     // configurations
-    var clientId:String {cfg["client_id"] as! String}
-    var clientSecret:String {cfg["client_secret"] as! String}
     var domain:String {cfg["domain"] as! String}
     var authenticationUrl:String {cfg["authentication_url"] as! String}
     var tokenUrl:String {cfg["token_url"] as! String}
@@ -396,6 +440,8 @@ public class Feedly: FeedAgent, Agent {
     var pageCount:Int {cfg["page_count"] as! Int}
     
     // properties
+    public var clientId:String {props["client_id"] as! String}
+    public var clientSecret:String {props["client_secret"] as! String}
     public var accessToken:String? {props["access_token"] as? String}
     public var refreshToken:String? {props["refresh_token"] as? String}
     public var expiresIn:TimeInterval? {props["expires_in"] as? TimeInterval}
