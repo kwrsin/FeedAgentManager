@@ -32,8 +32,12 @@ struct SecureStore {
         
         var query = query
         query[String(kSecAttrAccount)] = userAccount
-        
+
         var status = SecItemCopyMatching(query as CFDictionary, nil)
+
+        //https://developer.apple.com/forums/thread/7961
+        //https://developer.apple.com/forums/thread/78372
+        query[String(kSecAttrAccessible)] = kSecAttrAccessibleAfterFirstUnlock
         switch status {
         case errSecSuccess:
           var attributesToUpdate: [String: Any] = [:]
