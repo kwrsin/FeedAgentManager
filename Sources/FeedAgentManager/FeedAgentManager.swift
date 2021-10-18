@@ -1,6 +1,7 @@
 import Foundation
 
 public class FeedAgentManager {
+    public static var nonblocking_interval = 25.0
     private static var feedManager: FeedAgentManager?
     public let agent: Agent
     private init(_ agentType: FeedAgentManager.AgentType = FeedAgentManager.AgentType.Feedly,
@@ -273,7 +274,7 @@ extension FeedAgentManager {
                 FeedAgentManager.process(data: data, responseHeader: response, error: error, rawData: rawData, completion: completion)
                 semaphore.signal()
             }.resume()
-            if semaphore.wait(timeout: .now() + 5) == .timedOut {
+            if semaphore.wait(timeout: .now() + Self.nonblocking_interval) == .timedOut {
                 completion(.failure(.connectionError("timeout")))
             }
         }
