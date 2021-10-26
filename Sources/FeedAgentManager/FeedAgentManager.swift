@@ -443,9 +443,13 @@ public class Feedly: FeedAgent, Agent {
     // properties
     public var clientId:String {props["client_id"] as! String}
     public var clientSecret:String {props["client_secret"] as! String}
-    public var accessToken:String? {props["access_token"] as? String}
+    private var _accessToken:String? = nil
+    public var accessToken:String? {
+        get {_accessToken ?? props["access_token"] as? String} set {_accessToken = newValue}}
     public var refreshToken:String? {props["refresh_token"] as? String}
-    public var expiresIn:TimeInterval? {props["expires_in"] as? TimeInterval}
+    private var _expiresIn:TimeInterval? = nil
+    public var expiresIn:TimeInterval? {
+        get {_expiresIn ?? props["expires_in"] as? TimeInterval} set {_expiresIn = newValue}}
     public var createdAt:TimeInterval? {props["created_at"] as? TimeInterval}
     public var tokenType:String? {props["token_type"] as? String}
     public var bearerToken:String? {get {
@@ -584,7 +588,17 @@ public class Feedly: FeedAgent, Agent {
                 string: self.access_token_url)!, params: params.toParameters().data(using: .utf8), concurrentType: .Blocking) { result in
             faResult = result
         }
-        store(result: faResult)
+        if case let .success(data) = faResult, let data = data as? StorageManager.Properties {
+            let access_token = data["access_token"] as? String
+            let expires_in = data["expires_in"] as? TimeInterval
+            if let access_token = access_token, let expires_in = expires_in {
+                    
+                let newToken = ["access_token": access_token, "expires_in": expires_in] as [String : Any]
+                store(result: FeedAgentManager.FeedAgentResult.success(newToken))
+                self.accessToken = access_token
+                self.expiresIn = expires_in
+            }
+        }
         return faResult!
     }
     
