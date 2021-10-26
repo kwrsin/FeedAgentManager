@@ -37,7 +37,10 @@ struct SecureStore {
 
         //https://developer.apple.com/forums/thread/7961
         //https://developer.apple.com/forums/thread/78372
+        #if DEBUG
+        #else
         query[String(kSecAttrAccessible)] = kSecAttrAccessibleAfterFirstUnlock
+        #endif
         switch status {
         case errSecSuccess:
           var attributesToUpdate: [String: Any] = [:]
