@@ -37,7 +37,7 @@ struct SecureStore {
 
         //https://developer.apple.com/forums/thread/7961
         //https://developer.apple.com/forums/thread/78372
-        #if DEBUG
+        #if targetEnvironment(simulator)
         #else
         query[String(kSecAttrAccessible)] = kSecAttrAccessibleAfterFirstUnlock
         #endif
