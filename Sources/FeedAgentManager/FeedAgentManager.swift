@@ -325,7 +325,7 @@ public protocol Agent {
     func requestAccessToken() -> FeedAgentManager.FeedAgentResult
     func requestNewAccessToken() -> FeedAgentManager.FeedAgentResult
     func requestProfile() -> FeedAgentManager.FeedAgentResult
-    func logout(completion: @escaping FeedAgentManager.Completion)
+    func logout(clearForcing: Bool, completion: @escaping FeedAgentManager.Completion)
     func requestAllArticlesByPage(unreadOnly:Bool, concurrentType: FeedAgentManager.ConcurrentType,  articleType: FeedAgentManager.ArticleType, completion: @escaping FeedAgentManager.Completion)
     func requestMarking(entries: FeedAgentManager.Dict, type: FeedAgentManager.MarkingType, action: FeedAgentManager.MarkingAction, completion: @escaping FeedAgentManager.Completion)
     func requestUpdatingBoard(board: FeedAgentManager.Dict, tagId: String, completion: @escaping FeedAgentManager.Completion)
@@ -371,16 +371,9 @@ public class FeedAgent {
         self.storage.clearStorage(key: self.storageKey)
     }
     
-    func clear(result: FeedAgentManager.FeedAgentResult?) {
-        if let result = result {
-            switch result {
-            case .success(_):
-                clearProperties()
-                FeedAgentManager.removeFeedManage()
-            case .failure(_):
-                break
-            }
-        }
+    func clear() {
+        clearProperties()
+        FeedAgentManager.removeFeedManage()
     }
     
     func store(result: FeedAgentManager.FeedAgentResult?) {
@@ -615,15 +608,17 @@ public class Feedly: FeedAgent, Agent {
         return faResult!
     }
 
-    public func logout(completion: @escaping FeedAgentManager.Completion) {
+    public func logout(clearForcing: Bool = false, completion: @escaping FeedAgentManager.Completion) {
         FeedAgentManager.post(
             url: URL(
                 string: self.logout_url)!, concurrentType: .NonBlocking, accessToken: self.bearerToken) { [weak self] result in
             switch result {
             case .success(_):
-                self?.clear(result: result)
+                self?.clear()
             case .failure(_):
-                break
+                if clearForcing {
+                    self?.clear()
+                }
             }
             completion(result)
         }
