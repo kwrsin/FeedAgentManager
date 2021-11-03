@@ -384,8 +384,8 @@ public class FeedAgent {
     }
     
     func store(result: FeedAgentManager.FeedAgentResult?) {
-        if let resut = result {
-            switch resut {
+        if let result = result {
+            switch result {
             case .success(let dict):
                 updateProperties(properties: dict as! StorageManager.Properties, needCreateAt: true)
             case .failure(_):
