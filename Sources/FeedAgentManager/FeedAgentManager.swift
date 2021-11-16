@@ -342,6 +342,7 @@ public protocol Agent {
     func requestCategories(_ params: FeedAgentManager.Dict?, completion: @escaping FeedAgentManager.Completion)
     func requestRemovingCategory(categoryId: String, completion: @escaping FeedAgentManager.Completion)
     func uploadImage(path: String, params: FeedAgentManager.Dict?, attachment: FeedAgentManager.Attachment, id: String, completion: @escaping FeedAgentManager.Completion)
+    func clear()
 }
 
 public class FeedAgent {
@@ -371,7 +372,7 @@ public class FeedAgent {
         self.storage.clearStorage(key: self.storageKey)
     }
     
-    func clear() {
+    public func clear() {
         clearProperties()
         FeedAgentManager.removeFeedManage()
     }
