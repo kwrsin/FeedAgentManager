@@ -564,11 +564,7 @@ public class Feedly: FeedAgent, Agent {
                 string: self.access_token_url)!, params: params.toParameters().data(using: .utf8), concurrentType: .Blocking) { result in
             faResult = result
         }
-        if case .success(_) = faResult {
-            store(result: faResult)
-        } else {
-            self.clear()
-        }
+        store(result: faResult)
         return faResult!
     }
 
